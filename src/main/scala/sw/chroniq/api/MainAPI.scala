@@ -10,5 +10,6 @@ object MainAPI {
       new StreamRequestHandler orElse
       new AddPOI orElse
       new SearchPOI orElse
+      new CreateIndexes orElse
       new NoSuchMethod
 }

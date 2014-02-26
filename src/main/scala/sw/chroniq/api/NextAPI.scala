@@ -34,8 +34,6 @@ import scala.Some
 import sw.platform.api.APIRequest
 
 
-
-
 class AddPOI extends APIHandler("addPOI") {
 
   def apply(request: APIRequest) = {
@@ -45,6 +43,7 @@ class AddPOI extends APIHandler("addPOI") {
     val json = request.json
     val in_lat = (json \ "lat").asOpt[Double]
     val in_lon = (json \ "lon").asOpt[Double]
+    val desc = (json \ "desc").as[String]
 
     val lat = in_lat.get
 
@@ -145,6 +144,7 @@ class AddPOI extends APIHandler("addPOI") {
           s"""
       {
         $strOfId
+        "desc": "$desc",
         "location": {
           "lat":$lat,
           "lon":$lon
@@ -300,17 +300,13 @@ class CreateIndexes extends APIHandler("createIndexes") {
 
     val client = ES.client
 
+    val deletePOIIndex = client.execute(new DeleteIndexRequest("poi"))
 
-    // delete index
-    try {
-      client.admin().indices().delete(new DeleteIndexRequest("poi")).actionGet()
-    } catch {
-      case e: org.elasticsearch.indices.IndexMissingException =>
-    }
+    val deleteClusterIndex = client.execute(new DeleteIndexRequest("poiclusters"))
 
-    // create index
-    client.admin().indices().prepareCreate("poi").addMapping("poi",
-      """
+    val createPOIIndex = client.execute(
+      client.admin().indices().prepareCreate("poi").addMapping("poi",
+        """
 {
   "poi": {
     "properties": {
@@ -338,10 +334,28 @@ class CreateIndexes extends APIHandler("createIndexes") {
     }
   }
 }
-      """
+        """
+      ).request()
     )
 
+    val createClusterIndex = client.execute(
+      client.admin().indices().prepareCreate("poiclusters").addMapping("poi",
+        """
+{
+  "poi": {
+    "properties": {
+      "zoom": {"type": "integer"},
+      "location": {"type": "geo_point"}
+    }
+  }
+}
+        """
+      ).request()
+    )
 
+    Future sequence List(deletePOIIndex, deleteClusterIndex, createPOIIndex, createClusterIndex) map {
+      r => APIResponse(JSONResponse.result("OK"))
+    }
 
   }
 }
