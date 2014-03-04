@@ -156,192 +156,6 @@ class SearchPOI extends APIHandler("searchPOI") {
 
   case class Cluster(id: String, lat: Double, lon: Double, size: Long, poi: List[POI])
 
-
-  def apply(request: APIRequest) = {
-
-    import scala.language.existentials
-    import collection.JavaConversions._
-
-    try {
-
-      val json = request.json
-      val zoom = (json \ "zoom").as[Int]
-      val jsbounds = (json \ "bounds").as[Seq[Seq[Double]]]
-      val topic = (json \ "topic").as[String]
-
-
-
-
-      val (southWestLat, southWestLon, northEastLat, northEastLon) = jsbounds.flatten match {
-        case List(q, w, e, r, _*) => (q, w, e, r)
-      }
-
-
-      val client = ES.client
-
-      val clustersResponse = client.execute(client.prepareSearch("poiclusters").setTypes("poi")
-        .setSearchType(SearchType.DFS_QUERY_THEN_FETCH)
-        .setQuery(filteredQuery(matchAllQuery(), andFilter(
-        geoBoundingBoxFilter("location").bottomLeft(southWestLat, southWestLon).topRight(northEastLat, northEastLon),
-        termFilter("zoom", zoom)
-      )
-      )
-      ).request())
-
-
-      val multiSearchResponse = clustersResponse.flatMap {
-        sr =>
-          val multiSearchRequest = client.prepareMultiSearch
-          sr.getHits.map {
-            h =>
-              val clusterId = h.getId
-              multiSearchRequest.add(
-                client.prepareSearch("poi").setTypes("poi")
-                  .setSearchType(SearchType.DFS_QUERY_THEN_FETCH)
-                  .setQuery(//filteredQuery(matchAllQuery(), termFilter("z"+zoom,cluster_id))
-                  boolQuery().must(matchQuery("z" + zoom, clusterId)).must(matchQuery("desc", topic))
-                )
-                  .addField("")
-                  .setSize(100)
-
-              )
-
-          }
-          client.execute(multiSearchRequest.request())
-      }
-
-
-
-      val idsAndSize = multiSearchResponse.map {
-        multiresp =>
-
-          multiresp.getResponses.map {
-            resp =>
-              val hits = resp.getResponse.getHits
-              if (hits.getTotalHits < 9) {
-                (hits.getTotalHits, hits.take(8).map(_.getId))
-              } else {
-                (0, Nil)
-              }
-          }
-      }
-
-      val idsResponse = idsAndSize.flatMap {
-        idsAndSizeList =>
-          val idsq = idsQuery()
-          idsAndSizeList.map {
-            el =>
-              el._2.foreach(h => idsq.addIds(h))
-          }
-
-          client.execute(client.prepareSearch("poi").setTypes("poi")
-            .setSearchType(SearchType.DFS_QUERY_THEN_FETCH)
-            .setQuery(idsq).request())
-      }
-
-      val idPOI = idsResponse.map {
-        response =>
-          response.getHits.map {
-            hit =>
-              val source = hit.getSource
-              val id = hit.getId
-              val lat = source.get("location").asInstanceOf[java.util.HashMap[String, Double]].get("lat")
-              val lon = source.get("location").asInstanceOf[java.util.HashMap[String, Double]].get("lon")
-              val desc = source.get("desc").asInstanceOf[String]
-              id -> POI(id, lat, lon, desc)
-          }.toMap
-      }
-
-      val clusters = for {
-
-        idsMap <- idPOI
-
-        searchResp <- clustersResponse
-
-        sizes <- idsAndSize.mapTo[Array[(Long, Iterable[String])]]
-
-      } yield {
-
-        searchResp.getHits.zip(sizes).map {
-          hits =>
-            val (hit, (size, poiIds)) = hits
-
-            val source = hit.getSource
-            val id = hit.getId
-            val lat = source.get("location").asInstanceOf[java.util.HashMap[String, Double]].get("lat")
-            val lon = source.get("location").asInstanceOf[java.util.HashMap[String, Double]].get("lon")
-
-
-            Cluster(id, lat, lon, size, poiIds.map(idsMap(_)).toList)
-
-        }
-
-      }
-
-      clusters.flatMap {
-        ci =>
-
-          val j = ci.map {
-            c =>
-              val id = c.id
-              val lat = c.lat
-              val lon = c.lon
-              val size = c.size
-              val jpoi = c.poi.map {
-                p =>
-                  val pid = p.id
-                  val plat = p.lat
-                  val plon = p.lon
-                  val pdesc = p.desc
-
-
-                  s"""
-            {
-              "id": "$pid",
-              "lat": $plat,
-              "lon": $plon,
-              "desc": "$pdesc"
-
-            }
-            """
-
-              } mkString("[", ",", "]")
-
-              if (size != 0) {
-                s"""
-            {
-              "id": "$id",
-              "lat": $lat,
-              "lon": $lon,
-              "size": $size,
-              "poi": $jpoi
-
-            }
-            """
-              } else ""
-          } filter (_ != "") mkString("{\"result\": { \"clusters\": [", ",", "]}}")
-
-          Future(APIResponse(j))
-
-
-      }
-
-    } catch {
-      case e: play.api.libs.json.JsResultException => {
-        Future(APIResponse(JSONResponse.error(e.toString)))
-      }
-
-    }
-  }
-}
-
-
-class SearchPOI2 extends APIHandler("searchPOI2") {
-
-  case class POI(id: String, lat: Double, lon: Double, desc: String)
-
-  case class Cluster(id: String, lat: Double, lon: Double, size: Long, poi: List[POI])
-
   case class Params(zoom: Int, southWestLat: Double, southWestLon: Double, northEastLat: Double, northEastLon: Double, topic: String)
 
   def apply(request: APIRequest) = {
@@ -430,12 +244,13 @@ class SearchPOI2 extends APIHandler("searchPOI2") {
         hits.map {
           h =>
             val clusterId = h.getId
+            val bQuery0 = boolQuery().must(matchQuery("z" + params.zoom, clusterId))
+            val bQuery1 = if (params.topic != "") bQuery0.must(matchQuery("desc", params.topic)) else bQuery0
+
             multiSearchRequest.add(
               client.prepareSearch("poi").setTypes("poi")
                 .setSearchType(SearchType.DFS_QUERY_THEN_FETCH)
-                .setQuery(
-                boolQuery().must(matchQuery("z" + params.zoom, clusterId)).must(matchQuery("desc", params.topic))
-              )
+                .setQuery(bQuery1)
                 .addField("")
                 .setSize(100)
             )

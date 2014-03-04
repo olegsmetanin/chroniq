@@ -4,7 +4,9 @@
     <title>Chroniq</title>
     <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css" />
     <link rel="stylesheet" href="//cdn.leafletjs.com/leaflet-0.7.2/leaflet.css" />
+    <link href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" rel="stylesheet">
     <link rel="stylesheet" href="main.css" />
+    <link rel="stylesheet" href="markercluster.css" />
 
     <!-- Just for debugging purposes. Don't actually copy this line! -->
     <!--[if lt IE 9]><script src="../../assets/js/ie8-responsive-file-warning.js"></script><![endif]-->
@@ -39,13 +41,12 @@
                 <span class="icon-bar"></span>
                 <span class="icon-bar"></span>
             </button>
-            <a class="navbar-brand" href="#">Project name</a>
+            <a class="navbar-brand" href="#">Chroniq</a>
         </div>
         <div class="collapse navbar-collapse">
             <ul class="nav navbar-nav">
-                <li class="active"><a href="#">Home</a></li>
-                <li><a href="#about">About</a></li>
-                <li><a href="#contact">Contact</a></li>
+                <li class="active"><a href="/">Map</a></li>
+                <li><a href="#about">Add event</a></li>
             </ul>
         </div><!--/.nav-collapse -->
     </div>
@@ -65,6 +66,10 @@
         <div class="collapse navbar-collapse">
 
             <ul class="nav navbar-nav">
+                <li>
+                    <a id="update" href="#"><i class="fa fa-refresh"></i></a>
+
+                </li>
                 <li class="dropdown">
                     <a href="#" class="dropdown-toggle" data-toggle="dropdown">Google <b class="caret"></b></a>
                     <ul class="dropdown-menu">
@@ -72,18 +77,21 @@
                         <li><a href="#">Yahoo</a></li>
                     </ul>
                 </li>
+                <li>
                 <form class="navbar-form navbar-left" role="search">
                     <div class="form-group">
                         <input type="text" class="form-control" placeholder="Address">
                     </div>
                     <button type="submit" class="btn btn-default">Go to</button>
                 </form>
-
+                </li>
+                <li>
                 <form class="navbar-form navbar-left" role="search">
                     <div class="form-group has-error">
                         <input id="topic" type="text" class="form-control" placeholder="Topic">
                     </div>
                 </form>
+                </li>
             </ul>
 
         </div><!--/.nav-collapse -->

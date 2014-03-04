@@ -1,8 +1,12 @@
 var topic = $("#topic");
 
-map = new L.Map('map');
+var map = new L.Map('map');
 
-var osm = new L.TileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {minZoom: 8, maxZoom: 12, attribution: 'Map data © OpenStreetMap contributors'});
+var osm = new L.TileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: 'Map data © OpenStreetMap contributors'});
+
+var markerLayer = new L.LayerGroup();
+
+markerLayer.addTo(map);
 
 var lat = geoip_latitude();
 var lon = geoip_longitude();
@@ -53,7 +57,10 @@ function searchAction(criteria) {
         "bounds" : [[criteria.bounds.getSouth(), criteria.bounds.getWest()], [criteria.bounds.getNorth(), criteria.bounds.getEast()]],
         "topic"   : criteria.topic
     };
-    console.log(JSON.stringify(data))
+    //console.log(JSON.stringify(data))
+
+    $("#update").addClass("icon-refresh-animate");
+
     var promise = $.ajax(
         {
             url: "/api",
@@ -75,10 +82,50 @@ var mapChanges = new Rx.Subject();
 var searchResult = mapChanges.flatMapLatest(searchAction);
 
 searchResult.subscribe(function (data) {
+    $("#update").removeClass("icon-refresh-animate");
+    if (!data.error) {
+    var clusters = data.result.clusters;
+    var markersArray = [];
+    for (var i=0; i<clusters.length; i++) {
+        var cluster = clusters[i];
+        if (cluster.size>3) {
 
 
+        markersArray.push(
+            L.marker([cluster.lat, cluster.lon], {
+                icon: L.divIcon({
+                    className: 'marker-cluster marker-cluster-medium',
+                    html:'<div><span>'+cluster.size+'</span></div>',
+                    iconSize: new L.Point(40, 40)
+                })
+            })
+                .bindPopup('This is Denver, CO.')
+        )
+        } else {
+            var pois = cluster.poi;
+            for (var j=0; j<pois.length; j++) {
+                var poi = pois[j];
+                markersArray.push(
+                    L.marker([poi.lat, poi.lon], {
+                        icon: L.divIcon({
+                            className: 'event',
+                            html:'<div><img src="https://cdn4.iconfinder.com/data/icons/keynote-and-powerpoint-icons/256/Analytics_balls-48.png"/>'+'</div>',
+                            iconSize: new L.Point(48, 48)
+                        })
+                    })
+                        .bindPopup('This is Denver, CO.')
+                )
+            }
+        }
+    }
 
-    console.log('Next search: ',data);
+    markerLayer.clearLayers();
+    for (var i=0; i<markersArray.length; i++) {
+        var layer = markersArray[i];
+        markerLayer.addLayer(layer);
+    }
+    }
+    //console.log('Next search: ',data);
 
 
 }, function (e) {

@@ -54,10 +54,10 @@ class WebActor extends Actor with ActorLogging {
 
   def static : Receive = if (Utils.debugMode) {
     case req@HttpRequest(GET, _, _, _, _) => {
-
-      val ct = cType(req.uri.path.toString)
+      val path = if (req.uri.path.toString =="/") "/index.html" else req.uri.path.toString
+      val ct = cType(path)
       try {
-        val file = loadStaticFile("web"+req.uri.path.toString)
+        val file = loadStaticFile("web"+path)
         sender ! HttpResponse(entity = HttpEntity(ct, file))
       } catch {
         case e:Exception =>
@@ -77,7 +77,8 @@ class WebActor extends Actor with ActorLogging {
     case req@HttpRequest(GET, _, _, _, _) => {
 
       try {
-        val (ct, f) = files("web"+req.uri.path.toString)
+        val path = if (req.uri.path.toString =="/") "/index.html" else req.uri.path.toString
+        val (ct, f) = files("web"+path)
         sender ! HttpResponse(entity = HttpEntity(ct, f))
       } catch {
         case e:Exception =>

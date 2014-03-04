@@ -12,7 +12,6 @@ class AppAPI extends APISystem {
     new StreamRequestHandler orElse
     new AddPOI orElse
     new SearchPOI orElse
-    new SearchPOI2 orElse
     new CreateIndexes orElse
     new NoSuchMethod
 
