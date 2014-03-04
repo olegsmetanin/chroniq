@@ -1,14 +1,10 @@
-package sw.infrastructure
+package sw.platform.systems
 
-import com.github.nscala_time.time.Imports._
 import org.vertx.scala.core.http.ServerWebSocket
 import org.vertx.scala.core.sockjs.SockJSSocket
 import akka.actor.ActorRef
 
 case class WorkSystemRegistration(module: String, version: String)
-
-case class Film(code: String, title: String, did: Int, date_prod: LocalDate, kind: String, len: Period)
-
 
 case class RegisterWorkSystem(name: String, version: String)
 

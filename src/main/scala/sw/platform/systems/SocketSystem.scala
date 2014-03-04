@@ -1,4 +1,4 @@
-package sw.infrastructure
+package sw.platform.systems
 
 import scala.collection.JavaConversions._
 import scala.concurrent.duration._
@@ -21,8 +21,8 @@ import org.vertx.scala.core.sockjs.{SockJSServer}
 import org.vertx.scala.core.http.{HttpServer}
 import org.vertx.scala.core.json.JsonObject
 import org.vertx.scala.platform.Verticle
-import org.vertx.java.core.VertxFactory
 import org.vertx.java.core.impl.DefaultVertx
+import sw.platform.web.JSONResponse
 
 
 object SocketActor {

@@ -1,37 +1,24 @@
-package sw.api
-
-import scala.concurrent.Future
-import sw.infrastructure.{WorkActor, JSONResponse}
-import play.api.libs.json.{JsArray, JsValue}
-import scala.concurrent.ExecutionContext.Implicits.global
+package sw.chroniq.api
 
 import collection.JavaConversions._
-
-import scala.io.Source
-import java.io.PrintWriter
-
-import org.elasticsearch.client.transport.TransportClient
-import org.elasticsearch.common.transport.InetSocketTransportAddress
+import scala.concurrent.{Future, Promise}
+import scala.concurrent.ExecutionContext.Implicits.global
 import org.elasticsearch.action.admin.indices.delete.{DeleteIndexRequest}
-import org.elasticsearch.action.search.SearchType
+import org.elasticsearch.action.search.{MultiSearchResponse, SearchResponse, SearchType}
 import org.elasticsearch.index.query.FilterBuilders._
 import org.elasticsearch.index.query.QueryBuilders._
 import org.elasticsearch.common.unit.DistanceUnit
-import org.elasticsearch.common.geo.GeoPoint
-import org.elasticsearch.search.sort.SortOrder
-import scala.Some
 import sw.platform.api._
+import sw.platform.web._
 import sw.chroniq.es.ES
-import org.elasticsearch.action.index.IndexRequest
-import org.elasticsearch.action.index.IndexResponse
 import org.scalastuff.esclient.ESClient
-import org.elasticsearch.search.{SearchHit, SearchHits}
+import org.elasticsearch.search.{SearchHits}
+import sw.platform.web.JSONResponse
 import sw.platform.api.APIResponse
 import scala.Some
 import sw.platform.api.APIRequest
-import sw.platform.api.APIResponse
-import scala.Some
-import sw.platform.api.APIRequest
+import scala.util._
+
 
 
 class AddPOI extends APIHandler("addPOI") {
@@ -175,101 +162,327 @@ class SearchPOI extends APIHandler("searchPOI") {
     import scala.language.existentials
     import collection.JavaConversions._
 
+    try {
 
-    val json = request.json
-    val zoom = (json \ "zoom").as[Int]
-    val jsbounds = (json \ "bounds").as[Seq[Seq[Double]]]
+      val json = request.json
+      val zoom = (json \ "zoom").as[Int]
+      val jsbounds = (json \ "bounds").as[Seq[Seq[Double]]]
+      val topic = (json \ "topic").as[String]
 
-    val (southWestLat, southWestLon, northEastLat, northEastLon) = jsbounds.flatten match {
-      case List(q, w, e, r, _*) => (q, w, e, r)
+
+
+
+      val (southWestLat, southWestLon, northEastLat, northEastLon) = jsbounds.flatten match {
+        case List(q, w, e, r, _*) => (q, w, e, r)
+      }
+
+
+      val client = ES.client
+
+      val clustersResponse = client.execute(client.prepareSearch("poiclusters").setTypes("poi")
+        .setSearchType(SearchType.DFS_QUERY_THEN_FETCH)
+        .setQuery(filteredQuery(matchAllQuery(), andFilter(
+        geoBoundingBoxFilter("location").bottomLeft(southWestLat, southWestLon).topRight(northEastLat, northEastLon),
+        termFilter("zoom", zoom)
+      )
+      )
+      ).request())
+
+
+      val multiSearchResponse = clustersResponse.flatMap {
+        sr =>
+          val multiSearchRequest = client.prepareMultiSearch
+          sr.getHits.map {
+            h =>
+              val clusterId = h.getId
+              multiSearchRequest.add(
+                client.prepareSearch("poi").setTypes("poi")
+                  .setSearchType(SearchType.DFS_QUERY_THEN_FETCH)
+                  .setQuery(//filteredQuery(matchAllQuery(), termFilter("z"+zoom,cluster_id))
+                  boolQuery().must(matchQuery("z" + zoom, clusterId)).must(matchQuery("desc", topic))
+                )
+                  .addField("")
+                  .setSize(100)
+
+              )
+
+          }
+          client.execute(multiSearchRequest.request())
+      }
+
+
+
+      val idsAndSize = multiSearchResponse.map {
+        multiresp =>
+
+          multiresp.getResponses.map {
+            resp =>
+              val hits = resp.getResponse.getHits
+              if (hits.getTotalHits < 9) {
+                (hits.getTotalHits, hits.take(8).map(_.getId))
+              } else {
+                (0, Nil)
+              }
+          }
+      }
+
+      val idsResponse = idsAndSize.flatMap {
+        idsAndSizeList =>
+          val idsq = idsQuery()
+          idsAndSizeList.map {
+            el =>
+              el._2.foreach(h => idsq.addIds(h))
+          }
+
+          client.execute(client.prepareSearch("poi").setTypes("poi")
+            .setSearchType(SearchType.DFS_QUERY_THEN_FETCH)
+            .setQuery(idsq).request())
+      }
+
+      val idPOI = idsResponse.map {
+        response =>
+          response.getHits.map {
+            hit =>
+              val source = hit.getSource
+              val id = hit.getId
+              val lat = source.get("location").asInstanceOf[java.util.HashMap[String, Double]].get("lat")
+              val lon = source.get("location").asInstanceOf[java.util.HashMap[String, Double]].get("lon")
+              val desc = source.get("desc").asInstanceOf[String]
+              id -> POI(id, lat, lon, desc)
+          }.toMap
+      }
+
+      val clusters = for {
+
+        idsMap <- idPOI
+
+        searchResp <- clustersResponse
+
+        sizes <- idsAndSize.mapTo[Array[(Long, Iterable[String])]]
+
+      } yield {
+
+        searchResp.getHits.zip(sizes).map {
+          hits =>
+            val (hit, (size, poiIds)) = hits
+
+            val source = hit.getSource
+            val id = hit.getId
+            val lat = source.get("location").asInstanceOf[java.util.HashMap[String, Double]].get("lat")
+            val lon = source.get("location").asInstanceOf[java.util.HashMap[String, Double]].get("lon")
+
+
+            Cluster(id, lat, lon, size, poiIds.map(idsMap(_)).toList)
+
+        }
+
+      }
+
+      clusters.flatMap {
+        ci =>
+
+          val j = ci.map {
+            c =>
+              val id = c.id
+              val lat = c.lat
+              val lon = c.lon
+              val size = c.size
+              val jpoi = c.poi.map {
+                p =>
+                  val pid = p.id
+                  val plat = p.lat
+                  val plon = p.lon
+                  val pdesc = p.desc
+
+
+                  s"""
+            {
+              "id": "$pid",
+              "lat": $plat,
+              "lon": $plon,
+              "desc": "$pdesc"
+
+            }
+            """
+
+              } mkString("[", ",", "]")
+
+              if (size != 0) {
+                s"""
+            {
+              "id": "$id",
+              "lat": $lat,
+              "lon": $lon,
+              "size": $size,
+              "poi": $jpoi
+
+            }
+            """
+              } else ""
+          } filter (_ != "") mkString("{\"result\": { \"clusters\": [", ",", "]}}")
+
+          Future(APIResponse(j))
+
+
+      }
+
+    } catch {
+      case e: play.api.libs.json.JsResultException => {
+        Future(APIResponse(JSONResponse.error(e.toString)))
+      }
+
+    }
+  }
+}
+
+
+class SearchPOI2 extends APIHandler("searchPOI2") {
+
+  case class POI(id: String, lat: Double, lon: Double, desc: String)
+
+  case class Cluster(id: String, lat: Double, lon: Double, size: Long, poi: List[POI])
+
+  case class Params(zoom: Int, southWestLat: Double, southWestLon: Double, northEastLat: Double, northEastLon: Double, topic: String)
+
+  def apply(request: APIRequest) = {
+
+
+    import collection.JavaConversions._
+    import org.elasticsearch.client.Client
+
+    val p = Promise[APIResponse]
+
+    implicit val client = ES.client
+
+    parseInput(request) match {
+      case Failure(e) => p success APIResponse(JSONResponse.error("error in params"))
+      case Success(params) => {
+        queryClusters(params) onComplete {
+          case Failure(e) => p success APIResponse(JSONResponse.error("server error"))
+          case Success(clustersResponse) => {
+            queryClustersPOI(clustersResponse, params) match {
+              case None => p success APIResponse(generateJson(List())) // Empty list of clusters
+              case Some(queryIdOfPOI) => {
+                queryIdOfPOI onComplete {
+                  case Failure(e) => p success APIResponse(JSONResponse.error("server error"))
+                  case Success(idOfPOIResponse) => {
+
+                    val idsAndSize = getIdsAndSize(idOfPOIResponse)
+
+                    queryIds(idsAndSize) onComplete {
+                      case Failure(e) => p success APIResponse(JSONResponse.error("server error"))
+                      case Success(idsResponse) => {
+                        val POIMap = queryIdsToPOIMap(idsResponse)
+                        val clusters = parseCluster(clustersResponse, idsAndSize, POIMap)
+                        val json = generateJson(clusters)
+                        p success APIResponse(json)
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
 
-    val client = ES.client
 
-    val clustersResponse = client.execute(client.prepareSearch("poiclusters").setTypes("poi")
-      .setSearchType(SearchType.DFS_QUERY_THEN_FETCH)
-      .setQuery(filteredQuery(matchAllQuery(), andFilter(
-      geoBoundingBoxFilter("location").bottomLeft(southWestLat, southWestLon).topRight(northEastLat, northEastLon),
-      termFilter("zoom", zoom)
-    )
-    )
+
+    def parseInput(request: APIRequest) = {
+      import scala.language.existentials
+
+      try {
+        val json = request.json
+        val zoom = (json \ "zoom").as[Int]
+        val jsbounds = (json \ "bounds").as[Seq[Seq[Double]]]
+        val (southWestLat, southWestLon, northEastLat, northEastLon) = jsbounds.flatten match {
+          case List(q, w, e, r, _*) => (q, w, e, r)
+        }
+        val topic = (json \ "topic").as[String]
+        Success(Params(zoom, southWestLat, southWestLon, northEastLat, northEastLon, topic))
+      } catch {
+        case e: Exception => Failure(e)
+      }
+    }
+
+
+    def queryClusters(params: Params)(implicit client: Client) = client
+      .execute(client.prepareSearch("poiclusters").setTypes("poi")
+      .setSearchType(SearchType.DFS_QUERY_THEN_FETCH).setQuery(
+      filteredQuery(
+        matchAllQuery(),
+        andFilter(
+          geoBoundingBoxFilter("location")
+            .bottomLeft(params.southWestLat, params.southWestLon).topRight(params.northEastLat, params.northEastLon),
+          termFilter("zoom", params.zoom)
+        )
+      )
     ).request())
 
 
-    val multiSearchResponse = clustersResponse.flatMap {
-      sr =>
-        val multiSearchRequest = client.prepareMultiSearch
-        sr.getHits.map {
+    def queryClustersPOI(searchResponse: SearchResponse, params: Params)(implicit client: Client) = {
+      val multiSearchRequest = client.prepareMultiSearch
+      val hits = searchResponse.getHits
+      if (hits.getTotalHits == 0) {
+        None
+      } else {
+        hits.map {
           h =>
             val clusterId = h.getId
             multiSearchRequest.add(
               client.prepareSearch("poi").setTypes("poi")
                 .setSearchType(SearchType.DFS_QUERY_THEN_FETCH)
-                .setQuery(//filteredQuery(matchAllQuery(), termFilter("z"+zoom,cluster_id))
-                matchQuery("z" + zoom, clusterId)
+                .setQuery(
+                boolQuery().must(matchQuery("z" + params.zoom, clusterId)).must(matchQuery("desc", params.topic))
               )
                 .addField("")
                 .setSize(100)
-
             )
 
         }
-        client.execute(multiSearchRequest.request())
+        Some(client.execute(multiSearchRequest.request()))
+      }
     }
 
-
-
-    val idsAndSize = multiSearchResponse.map {
-      multiresp =>
-
-        multiresp.getResponses.map {
-          resp =>
-            val hits = resp.getResponse.getHits
-            if (hits.getTotalHits < 9) {
-              (hits.getTotalHits, hits.take(8).map(_.getId))
-            } else {
-              (0, Nil)
-            }
-        }
+    def getIdsAndSize(multiresp: MultiSearchResponse) = {
+      multiresp.getResponses.map {
+        resp =>
+          val hits = resp.getResponse.getHits
+          if (hits.getTotalHits < 9) {
+            (hits.getTotalHits, hits.take(8).map(_.getId))
+          } else {
+            (0L, Nil)
+          }
+      }
     }
 
-    val idsResponse = idsAndSize.flatMap {
-      idsAndSizeList =>
-        val idsq = idsQuery()
-        idsAndSizeList.map {
-          el =>
-            el._2.foreach(h => idsq.addIds(h))
-        }
+    def queryIds(idsAndSizeList: Array[(Long, Iterable[String])])(implicit client: Client) = {
+      val idsq = idsQuery()
+      idsAndSizeList.map {
+        el =>
+          el._2.foreach(h => idsq.addIds(h))
+      }
 
-        client.execute(client.prepareSearch("poi").setTypes("poi")
-          .setSearchType(SearchType.DFS_QUERY_THEN_FETCH)
-          .setQuery(idsq).request())
+      client.execute(client.prepareSearch("poi").setTypes("poi")
+        .setSearchType(SearchType.DFS_QUERY_THEN_FETCH)
+        .setQuery(idsq).request())
     }
 
-    val idPOI = idsResponse.map {
-      response =>
-        response.getHits.map {
-          hit =>
-            val source = hit.getSource
-            val id = hit.getId
-            val lat = source.get("location").asInstanceOf[java.util.HashMap[String, Double]].get("lat")
-            val lon = source.get("location").asInstanceOf[java.util.HashMap[String, Double]].get("lon")
-            val desc = source.get("desc").asInstanceOf[String]
-            id -> POI(id, lat, lon, desc)
-        }.toMap
+    def queryIdsToPOIMap(response: SearchResponse) = {
+      response.getHits.map {
+        hit =>
+          val source = hit.getSource
+          val id = hit.getId
+          val lat = source.get("location").asInstanceOf[java.util.HashMap[String, Double]].get("lat")
+          val lon = source.get("location").asInstanceOf[java.util.HashMap[String, Double]].get("lon")
+          val desc = source.get("desc").asInstanceOf[String]
+          id -> POI(id, lat, lon, desc)
+      }.toMap
     }
 
-    val clusters = for {
-
-      idsMap <- idPOI
-
-      searchResp <- clustersResponse
-
-      sizes <- idsAndSize.mapTo[Array[(Long, Iterable[String])]]
-
-    } yield {
-
-      searchResp.getHits.zip(sizes).map {
+    def parseCluster(searchResponse: SearchResponse, idsAndSizeList: Array[(Long, Iterable[String])], POIMap: Map[String, POI]) = {
+      searchResponse.getHits.zip(idsAndSizeList).map {
         hits =>
           val (hit, (size, poiIds)) = hits
 
@@ -279,20 +492,58 @@ class SearchPOI extends APIHandler("searchPOI") {
           val lon = source.get("location").asInstanceOf[java.util.HashMap[String, Double]].get("lon")
 
 
-          Cluster(id, lat, lon, size, poiIds.map(idsMap(_)).toList)
+          Cluster(id, lat, lon, size, poiIds.map(POIMap(_)).toList)
 
       }
-
     }
 
-    clusters.flatMap {
-      c =>
-        Future(APIResponse(JSONResponse.result("OK" + c.toString())))
+
+    def generateJson(clusters: Iterable[Cluster]) = {
+      clusters.map {
+        c =>
+          val id = c.id
+          val lat = c.lat
+          val lon = c.lon
+          val size = c.size
+          val jpoi = c.poi.map {
+            p =>
+              val pid = p.id
+              val plat = p.lat
+              val plon = p.lon
+              val pdesc = p.desc
+
+
+              s"""
+            {
+              "id": "$pid",
+              "lat": $plat,
+              "lon": $plon,
+              "desc": "$pdesc"
+
+            }
+            """
+
+          } mkString("[", ",", "]")
+
+          if (size != 0) {
+            s"""
+            {
+              "id": "$id",
+              "lat": $lat,
+              "lon": $lon,
+              "size": $size,
+              "poi": $jpoi
+
+            }
+            """
+          } else ""
+      } filter (_ != "") mkString("{\"result\": { \"clusters\": [", ",", "]}}")
     }
 
+
+    p.future
   }
 }
-
 
 class CreateIndexes extends APIHandler("createIndexes") {
 

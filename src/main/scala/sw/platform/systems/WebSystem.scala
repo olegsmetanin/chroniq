@@ -1,20 +1,28 @@
-package sw.infrastructure
+package sw.platform.systems
 
+import scala.util._
 import scala.Predef._
 import scala.language.implicitConversions
 import scala.concurrent.duration._
 
 import akka.actor._
 import akka.pattern._
-import akka.cluster.ClusterEvent.{MemberUp}
 import akka.cluster.{Cluster}
 import akka.io.IO
-import akka.util.Timeout
 
 import spray.can.Http
 import spray.http._
 import spray.http.HttpMethods._
 import spray.http.MediaTypes._
+import sw.platform.web._
+import java.io.File
+
+import spray.http.HttpCharsets._
+import spray.http.HttpRequest
+import akka.cluster.ClusterEvent.MemberUp
+import spray.http.HttpResponse
+import akka.actor.Terminated
+import spray.http.Timedout
 
 
 object WebActor {
@@ -23,7 +31,7 @@ object WebActor {
 
 class WebActor extends Actor with ActorLogging {
 
-  implicit val timeout: Timeout = 10.second // for the actor 'asks'
+  //implicit val timeout: Timeout = 20.second // for the actor 'asks'
 
   import context.dispatcher
 
@@ -40,48 +48,80 @@ class WebActor extends Actor with ActorLogging {
 
   var workers = IndexedSeq.empty[WorkSystemInfo]
 
-  def index = {
-    val source = scala.io.Source.fromFile("web/index.html")
-    val byteArray = source.map(_.toByte).toArray
-    source.close()
-    byteArray
+  context.receiveTimeout
+
+  import sw.platform.systems.Utils._
+
+  def static : Receive = if (Utils.debugMode) {
+    case req@HttpRequest(GET, _, _, _, _) => {
+
+      val ct = cType(req.uri.path.toString)
+      try {
+        val file = loadStaticFile("web"+req.uri.path.toString)
+        sender ! HttpResponse(entity = HttpEntity(ct, file))
+      } catch {
+        case e:Exception =>
+          sender ! HttpResponse(status = 404, entity = "Unknown resource!")
+      }
+    }
+
+  } else {
+
+    val m = allFiles(new File("web"))
+    val files = m.map{f =>
+      val ct = cType(f.getPath)
+      f.getPath -> (ct, loadStaticFile(f.getPath))
+    }.toMap
+
+    {
+    case req@HttpRequest(GET, _, _, _, _) => {
+
+      try {
+        val (ct, f) = files("web"+req.uri.path.toString)
+        sender ! HttpResponse(entity = HttpEntity(ct, f))
+      } catch {
+        case e:Exception =>
+          sender ! HttpResponse(status = 404, entity = "Unknown resource!")
+      }
+
+    }
+    }
+
   }
 
-  def mainjs = {
-    val source = scala.io.Source.fromFile("web/main.js")
-    val byteArray = source.map(_.toByte).toArray
-    source.close()
-    byteArray
-  }
-
-  def receive = {
+  def receive = static orElse {
 
     case _: Http.Connected => sender ! Http.Register(self)
 
-    case HttpRequest(GET, Uri.Path("/"), _, _, _) =>
-      sender ! HttpResponse(entity = HttpEntity(`text/html`, index))
-
-    case HttpRequest(GET, Uri.Path("/main.js"), _, _, _) =>
-      sender ! HttpResponse(entity = HttpEntity(`application/javascript`, mainjs))
-
     case msg@HttpRequest(POST, Uri.Path("/api"), _, _, _) => {
-      //println(msg.headers.toString)
+      val snd = sender
       if (workers.size > 0) {
         jobCounter += 1
         val worker: ActorRef = workers(jobCounter % workers.size).actorRef
-        (worker ? msg).mapTo[HttpResponse] pipeTo (sender)
+          (worker ? msg)(3.seconds).mapTo[HttpResponse] onComplete {
+            case Success(rsp) => snd ! rsp
+            case Failure(e:akka.pattern.AskTimeoutException) => {
+              snd ! HttpResponse(entity = HttpEntity(contentType = ContentType(`application/json`, `UTF-8`), JSONResponse.error("timeout")))
+            }
+            case Failure(e) => {
+              snd ! HttpResponse(entity = HttpEntity(contentType = ContentType(`application/json`, `UTF-8`), JSONResponse.error(e.toString)))
+            }
+          }
       } else {
-        sender ! JSONHTTPResponse.NOWORKERS
+        snd ! JSONHTTPResponse.NOWORKERS
       }
     }
 
     case _: HttpRequest => sender ! HttpResponse(status = 404, entity = "Unknown resource!")
 
-    case Timedout(HttpRequest(method, uri, _, _, _)) =>
-      sender ! HttpResponse(
-        status = 500,
-        entity = "The " + method + " request to '" + uri + "' has timed out..."
-      )
+    case Timedout(HttpRequest(method, uri, _, _, _)) => {
+      // first look at haproxy timeouts
+          sender ! HttpResponse(
+            status = 500,
+            entity = "The " + method + " request to '" + uri + "' has timed out..."
+          )
+    }
+
 
     case RegisterWorkSystem(name: String, version: String) if !workers.contains(WorkSystemInfo(name, version, sender)) => {
       println(Console.BLUE + "Web: worker " + sender.toString() + " " + name + " " + version + " REGISTRED" + Console.RESET)

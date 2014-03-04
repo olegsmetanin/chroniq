@@ -1,4 +1,4 @@
-package sw.infrastructure
+package sw.platform.systems
 
 
 import akka.cluster.{Cluster}

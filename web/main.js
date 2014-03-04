@@ -1,80 +1,41 @@
-angular.module('TodoApp', [])
-    .controller('TodoCtrl', function ($scope) {
-        $scope.foo = 'hi';
+var topic = $("#topic");
+
+map = new L.Map('map');
+
+var osm = new L.TileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {minZoom: 8, maxZoom: 12, attribution: 'Map data © OpenStreetMap contributors'});
+
+var lat = geoip_latitude();
+var lon = geoip_longitude();
+
+// start the map in South-East England
+map.setView(new L.LatLng(lat, lon), 9);
+map.addLayer(osm);
+
+
+// Move map actions
+
+map.on('moveend', onMapMove);
+
+function onMapMove(e) {
+    mapChanges.onNext({topic: topic.val(), bounds: map.getBounds(), zoom: map.getZoom()});
+}
+
+// Input topic key actions
+
+var topicKeyups = Rx.Observable.fromEvent(topic, 'keyup')
+    .map(function (e) {
+        return e.target.value;
+    })
+    .filter(function (text) {
+        return text.length > 2;
     });
 
-angular.bootstrap(document, ['TodoApp']);
+var throttledTopicKeyups = topicKeyups
+    .throttle(500 /* ms */);
 
-
-function createWork(msg) {
-
-    function s4() {
-        return Math.floor((1 + Math.random()) * 0x10000)
-            .toString(16)
-            .substring(1);
-    }
-
-    function guid() {
-        return s4() + s4() + '-' + s4() + '-' + s4() + '-' +
-            s4() + '-' + s4() + s4() + s4();
-    }
-
-    var workId = guid();
-
-    socket.sendIfOpen(JSON.stringify({workid: workId, msg: msg}));
-
-    var subscription = messages
-        .filter(function (msg) {
-            return msg.workid == workId;
-        })
-        .subscribe(
-        function (x) {
-            if (x.end) {
-                console.log('Last work result: ' + x);
-                subscription.dispose
-            } else {
-                console.log('Next work result: ' + x);
-            }
-        },
-        function (err) {
-            console.log('Error: ' + err);
-        },
-        function () {
-            console.log('Completed');
-        });
-}
-
-
-var messages = new Rx.Subject();
-
-var socket = new SockJS('http://localhost/bus/sock');
-
-socket.onopen = function () {
-    console.log('open');
-};
-
-socket.onmessage = function (event) {
-    //console.log('Next message: ', event.data);
-    messages.onNext(JSON.parse(event.data));
-};
-
-socket.onclose = function () {
-    console.log('close');
-};
-
-socket.sendIfOpen = function (message) {
-    if (socket.readyState === SockJS.OPEN) {
-        socket.send(message);
-    } else {
-        console.log("The socket is not open.");
-    }
-}
-
-var subscription = messages.subscribe(
+var topickeys = throttledTopicKeyups.subscribe(
     function (x) {
-        //console.log('Next message: ',x);
-        var txt = $("textarea#response");
-        txt.val(txt.val() + "\n" + JSON.stringify(x));
+        mapChanges.onNext({topic: x, bounds: map.getBounds(), zoom: map.getZoom()});
     },
     function (err) {
         console.log('Error: ' + err);
@@ -83,44 +44,46 @@ var subscription = messages.subscribe(
         console.log('Completed');
     });
 
-function ajaxsend(jsonBody) {
-    $.ajax(
+// Search actions
+
+function searchAction(criteria) {
+    var data = {
+        "method":"searchPOI",
+        "zoom"   : criteria.zoom,
+        "bounds" : [[criteria.bounds.getSouth(), criteria.bounds.getWest()], [criteria.bounds.getNorth(), criteria.bounds.getEast()]],
+        "topic"   : criteria.topic
+    };
+    console.log(JSON.stringify(data))
+    var promise = $.ajax(
         {
             url: "/api",
             type: "POST",
-            data: jsonBody,
+            data: JSON.stringify(data),
             dataType: "json",
             error: function (jqXHR, textStatus, errorThrown) {
                 console.log(jqXHR, textStatus, errorThrown)
             }
-        }).done(function (data) {
-            messages.onNext(data);
-        });
+        }).promise();
+
+    return Rx.Observable.fromPromise(promise);
 }
 
+// Apply search too map
 
-//
-//    var socket = new WebSocket("ws://localhost/bus/ws");
-//
-//    socket.onmessage = function (event) {
-//        //console.log("Received data from websocket: ", convert(event.data));
-//        messages.onNext( event.data);
-//    }
-//
-//    socket.onopen = function (event) {
-//        console.log("Web Socket opened");
-//    };
-//
-//    socket.onclose = function (event) {
-//        console.log("Web Socket closed");
-//    };
-//
-//    socket.sendIfOpen = function(message) {
-//
-//        if (socket.readyState === WebSocket.OPEN) {
-//            console.log("sending message")
-//            socket.send(message);
-//        } else {
-//            console.log("The socket is not open.");
-//        }
-//    }
+var mapChanges = new Rx.Subject();
+
+var searchResult = mapChanges.flatMapLatest(searchAction);
+
+searchResult.subscribe(function (data) {
+
+
+
+    console.log('Next search: ',data);
+
+
+}, function (e) {
+
+});
+
+
+mapChanges.onNext({topic: "", bounds: map.getBounds(), zoom: map.getZoom()});

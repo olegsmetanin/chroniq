@@ -5,9 +5,9 @@ import com.github.mauricio.async.db.postgresql.PostgreSQLConnection
 import com.github.mauricio.async.db.postgresql.pool.PostgreSQLConnectionFactory
 import com.github.mauricio.async.db.{ResultSet, RowData, QueryResult, Configuration}
 import scala.concurrent.{ExecutionContextExecutor, Future}
-import com.github.nscala_time.time.Imports._
 import scala.Some
-import sw.infrastructure.Film
+
+
 
 object DBs extends Map[String, ConnectionPool[PostgreSQLConnection]] {
 
@@ -61,16 +61,5 @@ object DAO {
 
   }
 
-  implicit def rowToFilm(row: RowData): Film = {
-    {
-      Film(
-        row("code").asInstanceOf[String],
-        row("title").asInstanceOf[String],
-        row("did").asInstanceOf[Int],
-        row("date_prod").asInstanceOf[LocalDate],
-        row("kind").asInstanceOf[String],
-        row("len").asInstanceOf[Period]
-      )
-    }
-  }
+
 }

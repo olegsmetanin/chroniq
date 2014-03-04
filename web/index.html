@@ -1,74 +1,102 @@
 <html>
 <head>
-    <title>SockJS Test</title>
-    <script src="//code.jquery.com/jquery-1.10.2.min.js"></script>
-    <script src="//cdn.sockjs.org/sockjs-0.3.4.min.js"></script>
-    <script src="//cdnjs.cloudflare.com/ajax/libs/rxjs/2.2.10/rx.lite.min.js"></script>
-    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.12/angular.min.js"></script>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <title>Chroniq</title>
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="//cdn.leafletjs.com/leaflet-0.7.2/leaflet.css" />
+    <link rel="stylesheet" href="main.css" />
+
+    <!-- Just for debugging purposes. Don't actually copy this line! -->
+    <!--[if lt IE 9]><script src="../../assets/js/ie8-responsive-file-warning.js"></script><![endif]-->
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+    <script src="//oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+    <script src="//oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+    <style>
+        body {
+            margin: 0;
+            padding: 50px 0;
+        }
+        html, body, #map {
+            height: 100%;
+        }
+    </style>
 </head>
 <body>
 
-<div ng-controller="TodoCtrl">
-    {{foo}}
+<div id="map"></div>
 
 
-    <form onsubmit="return false;">
-        <div>
-            <textarea rows="10" cols="45" name="request"></textarea>
-            <textarea id="response" rows="10" cols="45" name="response"></textarea>
+
+<div id="topbar" class="navbar navbar-inverse navbar-fixed-top" role="navigation">
+    <div class="container">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#topbar .navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="#">Project name</a>
         </div>
-        <div>
-            <input type="button" value="Send SockJS data"
-                   onclick="socket.sendIfOpen(this.form.request.value)"/>
-            <input type="button" value="Send ajax data"
-                   onclick="ajaxsend(this.form.request.value)"/>
-        </div>
-    </form>
-    <div style="">
-        <p>Send simple request</p>
-
-        <p>{
-            "method": "simpleRequest"
-            }
-        </p>
-
-        <p>SQL request</p>
-
-        <p>{
-            "method": "getFilms"
-            }
-        </p>
-
-        <p>Generic SQL request</p>
-
-        <p>{
-            "method": "sql",
-            "sql":"SELECT code, title, did, date_prod, kind, len FROM FILMS"
-            }
-        </p>
-
-        <p>Stream response</p>
-
-        <p>{
-            "method": "stream",
-            "streamid":"qweasdzxc"
-            }
-        </p>
-
-        <p>Send broadcast</p>
-
-        <p>{
-            "method": "broadcast",
-            "message": {
-            "message": "This is broadcast message"
-            }
-            }
-        </p>
+        <div class="collapse navbar-collapse">
+            <ul class="nav navbar-nav">
+                <li class="active"><a href="#">Home</a></li>
+                <li><a href="#about">About</a></li>
+                <li><a href="#contact">Contact</a></li>
+            </ul>
+        </div><!--/.nav-collapse -->
     </div>
+</div>
 
+<div id="bottombar" class="navbar navbar-inverse navbar-fixed-bottom" role="navigation">
+    <div class="container">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#bottombar .navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+        </div>
+
+        <div class="collapse navbar-collapse">
+
+            <ul class="nav navbar-nav">
+                <li class="dropdown">
+                    <a href="#" class="dropdown-toggle" data-toggle="dropdown">Google <b class="caret"></b></a>
+                    <ul class="dropdown-menu">
+                        <li><a href="#">Yandex</a></li>
+                        <li><a href="#">Yahoo</a></li>
+                    </ul>
+                </li>
+                <form class="navbar-form navbar-left" role="search">
+                    <div class="form-group">
+                        <input type="text" class="form-control" placeholder="Address">
+                    </div>
+                    <button type="submit" class="btn btn-default">Go to</button>
+                </form>
+
+                <form class="navbar-form navbar-left" role="search">
+                    <div class="form-group has-error">
+                        <input id="topic" type="text" class="form-control" placeholder="Topic">
+                    </div>
+                </form>
+            </ul>
+
+        </div><!--/.nav-collapse -->
+    </div>
 </div>
 
 
+<script src="//j.maxmind.com/app/geoip.js"></script>
+<script src="//code.jquery.com/jquery-1.10.2.min.js"></script>
+<script src="//cdn.sockjs.org/sockjs-0.3.4.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/rxjs/2.2.10/rx.lite.min.js"></script>
+<script src="//netdna.bootstrapcdn.com/bootstrap/3.1.1/js/bootstrap.min.js"></script>
+<script src="//cdn.leafletjs.com/leaflet-0.7.2/leaflet.js"></script>
 <script src="main.js"></script>
 
 <script>

@@ -1,9 +1,9 @@
-package sw.infrastructure
+package sw.platform
 
 import com.typesafe.config.ConfigFactory
 import akka.actor.ActorSystem
-import scala.collection.JavaConversions._
 
+import systems._
 
 object Starter extends App {
 

@@ -1,14 +1,37 @@
-package sw.api
+package sw.chroniq.api
 
-import sw.infrastructure._
-import scala.concurrent._
-import scala.concurrent.ExecutionContext.Implicits.global
-import sw.infrastructure.Film
 import scala.Some
-import sw.infrastructure.Broadcast
+import scala.concurrent._
 import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext.Implicits.global
+
+import sw.platform.systems._
 import sw.platform.api._
-import sw.platform.db.{DAO, DBs}
+import sw.platform.db._
+import sw.platform.web._
+
+case class Film(code: String, title: String, did: Int, date_prod: com.github.nscala_time.time.Imports.LocalDate, kind: String, len: com.github.nscala_time.time.Imports.Period)
+
+object Film {
+  import scala.language.implicitConversions
+  import com.github.mauricio.async.db.RowData
+
+  implicit def rowToFilm(row: RowData): Film = {
+    {
+      Film(
+        row("code").asInstanceOf[String],
+        row("title").asInstanceOf[String],
+        row("did").asInstanceOf[Int],
+        row("date_prod").asInstanceOf[com.github.nscala_time.time.Imports.LocalDate],
+        row("kind").asInstanceOf[String],
+        row("len").asInstanceOf[com.github.nscala_time.time.Imports.Period]
+      )
+    }
+  }
+}
+
+
+
 
 
 class NoSuchMethod extends PartialFunction[APIRequest, Future[APIResponse]] {
@@ -28,6 +51,13 @@ class SimpleRequestHandler extends APIHandler("simpleRequest") {
 
 }
 
+class SimpleRequestRUHandler extends APIHandler("simpleRURequest") {
+
+  def apply(request:APIRequest) = {
+    Future(APIResponse(JSONResponse.result("привет всем")))
+  }
+
+}
 
 class GetFilmsRequestHandler extends APIHandler("getFilms") {
 
@@ -72,8 +102,6 @@ class SQLRequestHandler extends APIHandler("sql") {
 
 class BroadcastRequestHandler extends APIHandler("broadcast") {
 
-  import DAO._
-
   def apply(request:APIRequest) = {
     val message = (request.json \ "message").toString
     request.workActor.socketWorkers.foreach(_ ! Broadcast(
@@ -100,7 +128,7 @@ class StreamRequestHandler extends APIHandler("stream") {
       stream <- (request.json \ "streamid").asOpt[String]
     } yield {
 
-      val periodic = request.workActor.context.system.scheduler.schedule(1.second, 1.second) {
+      val periodic = request.workActor.context.system.scheduler.schedule(1.seconds, 1.second) {
         val time = System.currentTimeMillis()
         snd ! SocketSend(socket,
           s"""

@@ -1,23 +1,20 @@
-package sw.infrastructure
+package sw.platform.systems
 
 import akka.actor._
+import akka.actor.RootActorPath
 import akka.cluster.{Member, MemberStatus, Cluster}
+import akka.cluster.ClusterEvent.MemberUp
+import akka.cluster.ClusterEvent.CurrentClusterState
+
+
 import spray.http._
 import spray.http.HttpMethods._
 import spray.http.MediaTypes._
-import spray.http.HttpRequest
+import HttpCharsets._
 
-import spray.http.HttpResponse
-import akka.actor.RootActorPath
-import akka.cluster.ClusterEvent.CurrentClusterState
-
-import akka.cluster.ClusterEvent.MemberUp
-import sw.api.{MainAPI}
 import play.api.libs.json.Json
-import akka.actor.Scope
-import sw.platform.api._
-import sw.platform.db.DAO
 
+import sw.platform.api._
 
 object WorkActor {
 
@@ -25,7 +22,7 @@ object WorkActor {
 
 }
 
-class WorkActor extends Actor {
+class WorkActor(api:APISystem) extends Actor {
 
 
   val cluster = Cluster(context.system)
@@ -36,8 +33,6 @@ class WorkActor extends Actor {
   override def postStop(): Unit = cluster.unsubscribe(self)
 
   var socketWorkers = IndexedSeq.empty[ActorRef]
-
-  val api = MainAPI()
 
   def receive = {
 
@@ -58,7 +53,6 @@ class WorkActor extends Actor {
     case req@HttpRequest(POST, Uri.Path("/api"), _, _, _) => {
 
       import scala.concurrent.ExecutionContext.Implicits.global
-      import DAO._
 
       // important to save sender!!!
       val snd = sender
@@ -68,15 +62,16 @@ class WorkActor extends Actor {
       val json = Json.parse(req.entity.data.asString)
       val method = (json \ "method").asOpt[String].get
       val params: Map[String,Any] = Map[String,Any]("protocol" -> "http")
+      val time = System.currentTimeMillis()
       api(APIRequest(method, json, params, this)).onComplete {
         s =>
-          snd ! HttpResponse(entity = HttpEntity(`application/json`, s.get.body))
+          if ((System.currentTimeMillis() - time)>10000) println("Request >10s :" + req.toString)
+          snd ! HttpResponse(entity = HttpEntity(contentType = ContentType(`application/json`, `UTF-8`), s.get.body))
       }
     }
 
     case SocketRecieve(id: String, headers: Map[String, Set[String]], msg: String) => {
       import scala.concurrent.ExecutionContext.Implicits.global
-      import DAO._
 
       // important to save sender!!!
       val snd = sender
@@ -113,5 +108,15 @@ object WorkSystem extends GenSystem {
 }
 
 class WorkSystem(system: ActorSystem) {
-  val workActor = system.actorOf(Props[WorkActor], name = WorkActor.name)
+
+  val config = system.settings.config
+
+  val apiclass = if (config.hasPath("apiclass")) config.getString("apiclass") else "sw.api.MainAPI"
+
+  val api = Class.forName(apiclass).newInstance.asInstanceOf[APISystem]
+
+  val actorProps = Props(classOf[WorkActor], api)
+
+  val workActor = system.actorOf(actorProps, name = WorkActor.name)
+
 }

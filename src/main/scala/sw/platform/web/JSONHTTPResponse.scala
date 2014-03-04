@@ -1,6 +1,6 @@
-package sw.infrastructure
+package sw.platform.web
 
-import spray.http.{HttpEntity}
+import spray.http.HttpEntity
 import spray.http.MediaTypes._
 import spray.http.HttpResponse
 
