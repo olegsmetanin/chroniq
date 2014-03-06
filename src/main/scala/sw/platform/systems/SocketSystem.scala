@@ -23,6 +23,7 @@ import org.vertx.scala.core.json.JsonObject
 import org.vertx.scala.platform.Verticle
 import org.vertx.java.core.impl.DefaultVertx
 import sw.platform.web.JSONResponse
+import sw.platform.utils.Utils
 
 
 object SocketActor {

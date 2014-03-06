@@ -8,16 +8,13 @@ scalacOptions in ThisBuild ++= Seq("-unchecked", "-deprecation", "-feature")
 
 net.virtualvoid.sbt.graph.Plugin.graphSettings
 
+unmanagedResourceDirectories in Compile += baseDirectory.value / "src" / "main" / "webapp"
+
 libraryDependencies ++= Seq(
-//  "io.spray" % "spray-can" % "1.2.0",
-//  "io.spray" % "spray-http" % "1.2.0",
-//  "io.spray" % "spray-util" % "1.2.0",
-//  "com.typesafe.akka" %% "akka-cluster" % "2.2.3",
   "io.spray" % "spray-can" % "1.3-RC4",
   "io.spray" % "spray-http" % "1.3-RC4",
   "io.spray" % "spray-util" % "1.3-RC4",
   "com.typesafe.akka" %% "akka-cluster" % "2.3.0-RC4",
-//    "com.typesafe.akka" %% "akka-cluster" % "2.3.0-RC3",
   "com.googlecode.concurrentlinkedhashmap"  %   "concurrentlinkedhashmap-lru" % "1.4",
   ("io.vertx" % "vertx-core" % "2.1M5").exclude("log4j","log4j"),
   ("io.vertx" % "vertx-platform" % "2.1M5").exclude("log4j","log4j"),
