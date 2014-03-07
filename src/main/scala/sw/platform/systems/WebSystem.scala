@@ -24,6 +24,8 @@ import spray.http.HttpResponse
 import akka.actor.Terminated
 import spray.http.Timedout
 import sw.platform.utils.Utils
+import sw.platform.utils.WebUtils._
+import scala.Option
 
 
 object WebActor {
@@ -51,51 +53,53 @@ class WebActor extends Actor with ActorLogging {
 
   context.receiveTimeout
 
-  import Utils._
-
   def static: Receive = {
 
-    (new File("src/main/webapp/public"), Option(getClass.getClassLoader.getResource("public/"))) match {
-      // Reload file on each request from src/main/webapp/public
-      case (f, _) if f.exists() => {
+    if (Utils.isJar) {
+      // Get file from Jar public folder
+      val files = templatesFromClass
+
+      {
         case req@HttpRequest(GET, _, _, _, _) => {
-          val path = if (req.uri.path.toString == "/") "/index.html" else req.uri.path.toString
-          val ct = cType(path)
+          val path = req.uri.path.toString
           try {
-            val file = loadStaticFile("src/main/webapp/public" + path)
-            sender ! HttpResponse(entity = HttpEntity(ct, file))
+            val (ct, f) = files(path)
+            sender ! HttpResponse(entity = HttpEntity(ct, f))
           } catch {
             case e: Exception =>
               sender ! HttpResponse(status = 404, entity = "Unknown resource!")
           }
         }
       }
+    } else {
+      val PUBLICPATH = "src/main/webapp/public"
+      val public = new File(PUBLICPATH)
 
-      case (_, Some(public)) if (Utils.isJar) => {
-        // Get file from Jar public folder
-        val files = allFilesFromJar("public/")
+      println(public.isDirectory)
 
-        {
-          case req@HttpRequest(GET, _, _, _, _) => {
-            val path = if (req.uri.path.toString == "/") "/index.html" else req.uri.path.toString
-            try {
-              val (ct, f) = files(path)
-              sender ! HttpResponse(entity = HttpEntity(ct, f))
-            } catch {
-              case e: Exception =>
-                sender ! HttpResponse(status = 404, entity = "Unknown resource!")
-            }
-          }
+      if (!public.isDirectory) throw new Exception("Search of webapp directory failed")
+
+      {
+        case req@HttpRequest(GET, _, _, _, _) => {
+        val path = if (req.uri.path.toString == "/") "/index.html" else req.uri.path.toString
+
+        val ct = cType(path)
+        try {
+          val file = if ((new File(PUBLICPATH + path)).exists()) {
+            loadStaticFile(PUBLICPATH + path)
+          } else if ((new File(PUBLICPATH + path+".html")).exists()) {
+            loadStaticFile(PUBLICPATH + path+".html")
+          } else throw new Exception
+
+          sender ! HttpResponse(entity = HttpEntity(ct, file))
+
+        } catch {
+          case e: Exception =>
+            sender ! HttpResponse(status = 404, entity = "Unknown resource!")
         }
-
       }
-
-      case _ => {
-        throw new Exception("Search of webapp directory failed")
       }
-
     }
-
 
   }
 

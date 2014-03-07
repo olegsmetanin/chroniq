@@ -39,3 +39,10 @@ resolvers += "Typesafe Snapshots" at "http://repo.typesafe.com/typesafe/snapshot
 resolvers += "spray repo" at "http://repo.spray.io"
 
 resolvers += "spray nightlies repo" at "http://nightlies.spray.io"
+
+sourceGenerators in Compile <+= (sourceManaged in Compile, version) map {
+(dir, version) =>
+val file = dir / "sw" / "platform" / "utils" / "Templates.scala"
+IO.write(file, Helpers.generate)
+Seq(file)
+}

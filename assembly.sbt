@@ -5,3 +5,4 @@ assemblySettings
 mainClass in assembly := Some("sw.platform.Starter")
 
 jarName in assembly := "chroniqserver.jar"
+
