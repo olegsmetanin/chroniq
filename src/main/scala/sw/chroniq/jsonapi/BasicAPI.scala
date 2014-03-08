@@ -1,4 +1,4 @@
-package sw.chroniq.api
+package sw.chroniq.jsonapi
 
 import scala.Some
 import scala.concurrent._
@@ -30,57 +30,63 @@ object Film {
   }
 }
 
+class NoSuchMethod extends PartialFunction[JSONAPIRequest, Future[JSONAPIResponse]] {
 
+  def isDefinedAt(scope: JSONAPIRequest): Boolean = true
 
-
-
-class NoSuchMethod extends PartialFunction[APIRequest, Future[APIResponse]] {
-
-  def isDefinedAt(scope: APIRequest): Boolean = true
-
-  def apply(scope: APIRequest) =
-    Future(APIResponse(JSONResponse.error("No such method")))
+  def apply(scope: JSONAPIRequest) =
+    Future(JSONAPIResponse(JSONResponse.error("No such method")))
 
 }
 
-class SimpleRequestHandler extends APIHandler("simpleRequest") {
+class SimpleRequestHandler(method:String) extends PartialFunction[JSONAPIRequest, Future[JSONAPIResponse]] {
 
-  def apply(request:APIRequest) = {
-    Future(APIResponse(JSONResponse.result("Simple response")))
+  def isDefinedAt(x: JSONAPIRequest): Boolean = x.method==method
+
+  def apply(request:JSONAPIRequest) = {
+    Future(JSONAPIResponse(JSONResponse.result("Simple response")))
   }
 
 }
 
-class SimpleRequestRUHandler extends APIHandler("simpleRURequest") {
+class SimpleRequestRUHandler(method:String) extends PartialFunction[JSONAPIRequest, Future[JSONAPIResponse]] {
 
-  def apply(request:APIRequest) = {
-    Future(APIResponse(JSONResponse.result("привет всем")))
+  def isDefinedAt(x: JSONAPIRequest): Boolean = x.method==method
+
+  def apply(request:JSONAPIRequest) = {
+    Future(JSONAPIResponse(JSONResponse.result("привет всем")))
   }
 
 }
 
-class GetFilmsRequestHandler extends APIHandler("getFilms") {
+class GetFilmsRequestHandler(method:String) extends PartialFunction[JSONAPIRequest, Future[JSONAPIResponse]] {
+
+  def isDefinedAt(x: JSONAPIRequest): Boolean = x.method==method
 
   import DAO._
 
-  def apply(request:APIRequest) = {
+  def apply(request:JSONAPIRequest) = {
     DBs("saas")
       .sendQuery("SELECT code, title, did, date_prod, kind, len FROM FILMS")
       .asListOf[Film]
       .map {
       f =>
-        APIResponse(JSONResponse.result(f.toString))
+        JSONAPIResponse(JSONResponse.result(f.toString))
     }
 
   }
+
+
 }
 
 
-class SQLRequestHandler extends APIHandler("sql") {
+class SQLRequestHandler(method:String) extends PartialFunction[JSONAPIRequest, Future[JSONAPIResponse]] {
+
+  def isDefinedAt(x: JSONAPIRequest): Boolean = x.method==method
 
   import DAO._
 
-  def apply(request:APIRequest) = {
+  def apply(request:JSONAPIRequest) = {
     (request.json \ "sql").asOpt[String] match {
       case Some(sql) => {
         DBs("saas")
@@ -88,11 +94,11 @@ class SQLRequestHandler extends APIHandler("sql") {
           .asListOf[Any]
           .map {
           v =>
-            APIResponse(JSONResponse.result(v.toString))
+            JSONAPIResponse(JSONResponse.result(v.toString))
         }
       }
       case _ => {
-        Future(APIResponse(JSONResponse.error("No sql command")))
+        Future(JSONAPIResponse(JSONResponse.error("No sql command")))
       }
     }
 
@@ -100,9 +106,11 @@ class SQLRequestHandler extends APIHandler("sql") {
 }
 
 
-class BroadcastRequestHandler extends APIHandler("broadcast") {
+class BroadcastRequestHandler(method:String) extends PartialFunction[JSONAPIRequest, Future[JSONAPIResponse]] {
 
-  def apply(request:APIRequest) = {
+  def isDefinedAt(x: JSONAPIRequest): Boolean = x.method==method
+
+  def apply(request:JSONAPIRequest) = {
     val message = (request.json \ "message").toString
     request.workActor.socketWorkers.foreach(_ ! Broadcast(
       s"""
@@ -112,14 +120,16 @@ class BroadcastRequestHandler extends APIHandler("broadcast") {
           }
           """))
 
-    Future(APIResponse(JSONResponse.result("OK")))
+    Future(JSONAPIResponse(JSONResponse.result("OK")))
 
   }
 }
 
-class StreamRequestHandler extends APIHandler("stream") {
+class StreamRequestHandler(method:String) extends PartialFunction[JSONAPIRequest, Future[JSONAPIResponse]] {
 
-  def apply(request:APIRequest) = {
+  def isDefinedAt(x: JSONAPIRequest): Boolean = x.method==method
+
+  def apply(request:JSONAPIRequest) = {
 
     val snd = request.workActor.context.sender
 
@@ -153,10 +163,10 @@ class StreamRequestHandler extends APIHandler("stream") {
               """)
       }
 
-      APIResponse(JSONResponse.result("OK"))
+      JSONAPIResponse(JSONResponse.result("OK"))
     }
 
-    Future(res.getOrElse(APIResponse(JSONResponse.error("No streamId or request coming not from socket"))))
+    Future(res.getOrElse(JSONAPIResponse(JSONResponse.error("No streamId or request coming not from socket"))))
 
   }
 }

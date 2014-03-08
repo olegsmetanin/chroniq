@@ -15,6 +15,24 @@ import HttpCharsets._
 import play.api.libs.json.Json
 
 import sw.platform.api._
+import sw.platform.utils.Utils
+import sw.platform.utils.WebUtils._
+
+
+
+import java.io.File
+import scala.util._
+
+import scala.util.Failure
+import spray.http.HttpResponse
+import scala.util.Success
+import akka.actor.RootActorPath
+import sw.platform.api.JSONAPIRequest
+import spray.http.HttpRequest
+import akka.cluster.ClusterEvent.MemberUp
+import sw.platform.api.PageRequest
+import akka.cluster.ClusterEvent.CurrentClusterState
+
 
 object WorkActor {
 
@@ -22,7 +40,7 @@ object WorkActor {
 
 }
 
-class WorkActor(api:APISystem) extends Actor {
+class WorkActor(jsonapi: GenJSONAPIRoutes, pages: GenPageRoutes) extends Actor {
 
 
   val cluster = Cluster(context.system)
@@ -50,6 +68,40 @@ class WorkActor(api:APISystem) extends Actor {
       }
     }
 
+    case req@HttpRequest(GET, uri, _, _, _) => {
+
+      import scala.concurrent.ExecutionContext.Implicits.global
+      import spray.http.HttpHeaders._
+      import scala.language.implicitConversions
+
+      implicit def headers2SprayHeaders(in: List[(String, String)]): List[spray.http.HttpHeader] = {
+        in.map {
+          el =>
+            new RawHeader(el._1, el._2)
+        }
+      }
+
+      // important to save sender!!!
+      val snd = sender
+
+      val params: Map[String, Any] = Map[String, Any]("protocol" -> "http")
+      val time = System.currentTimeMillis()
+      pages(PageRequest(uri.path.toString(), params)).onComplete {
+        case Success(resp) => {
+          if ((System.currentTimeMillis() - time) > 10000) println("Request >10s :" + req.toString)
+          val headers: List[spray.http.HttpHeader] = resp.headers
+          val contentType = resp.contentType
+          snd ! HttpResponse(entity = HttpEntity(contentType,resp.body), headers = headers)
+        }
+        case Failure(e) => {
+          snd ! HttpResponse(entity = HttpEntity("Request failed"))
+        }
+
+
+      }
+    }
+
+
     case req@HttpRequest(POST, Uri.Path("/api"), _, _, _) => {
 
       import scala.concurrent.ExecutionContext.Implicits.global
@@ -61,11 +113,11 @@ class WorkActor(api:APISystem) extends Actor {
 
       val json = Json.parse(req.entity.data.asString)
       val method = (json \ "method").asOpt[String].get
-      val params: Map[String,Any] = Map[String,Any]("protocol" -> "http")
+      val params: Map[String, Any] = Map[String, Any]("protocol" -> "http")
       val time = System.currentTimeMillis()
-      api(APIRequest(method, json, params, this)).onComplete {
+      jsonapi(JSONAPIRequest(method, json, params, this)).onComplete {
         s =>
-          if ((System.currentTimeMillis() - time)>10000) println("Request >10s :" + req.toString)
+          if ((System.currentTimeMillis() - time) > 10000) println("Request >10s :" + req.toString)
           snd ! HttpResponse(entity = HttpEntity(contentType = ContentType(`application/json`, `UTF-8`), s.get.body))
       }
     }
@@ -81,9 +133,9 @@ class WorkActor(api:APISystem) extends Actor {
 
       val json = Json.parse(msg)
       val method = (json \ "method").asOpt[String].get
-      val params: Map[String,Any] = Map[String,Any]("protocol" -> "socket", "socketid" -> id)
+      val params: Map[String, Any] = Map[String, Any]("protocol" -> "socket", "socketid" -> id)
 
-      api(APIRequest(method, json, params, this)).onComplete {
+      jsonapi(JSONAPIRequest(method, json, params, this)).onComplete {
         s =>
           snd ! SocketSend(sid, s.get.body)
       }
@@ -111,11 +163,15 @@ class WorkSystem(system: ActorSystem) {
 
   val config = system.settings.config
 
-  val apiclass = if (config.hasPath("apiclass")) config.getString("apiclass") else "sw.api.MainAPI"
+  val jsonapiclass = if (config.hasPath("jsonapiroutes")) config.getString("jsonapiroutes") else throw new Exception("Failed to find jsonapiroutes property")
 
-  val api = Class.forName(apiclass).newInstance.asInstanceOf[APISystem]
+  val pageclass = if (config.hasPath("pageroutes")) config.getString("pageroutes") else throw new Exception("Failed to find pageroutes property")
 
-  val actorProps = Props(classOf[WorkActor], api)
+  val api = Class.forName(jsonapiclass).newInstance.asInstanceOf[GenJSONAPIRoutes]
+
+  val pages = Class.forName(pageclass).newInstance.asInstanceOf[GenPageRoutes]
+
+  val actorProps = Props(classOf[WorkActor], api, pages)
 
   val workActor = system.actorOf(actorProps, name = WorkActor.name)
 

@@ -1,5 +1,17 @@
 var topic = $("#topic");
 
+$("#showdialog").on('click',function () {
+    $('#mapwrap').toggle();
+    $('#dialogwrap').toggle();
+})
+
+
+$("#hidedialog").on('click',function () {
+    $('#mapwrap').toggle();
+    $('#dialogwrap').toggle();
+})
+
+
 var map = new L.Map('map');
 
 var osm = new L.TileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: 'Map data © OpenStreetMap contributors'});
@@ -113,7 +125,12 @@ searchResult.subscribe(function (data) {
                             iconSize: new L.Point(48, 48)
                         })
                     })
-                        .bindPopup('This is Denver, CO.')
+                    //    .bindPopup('This is Denver, CO.')
+                        .on("click", function() {
+                            $('#myModal').modal('show')
+                        })
+
+
                 )
             }
         }

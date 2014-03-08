@@ -3,26 +3,34 @@ package sw.platform.api
 import scala.Predef._
 import scala.concurrent.Future
 import play.api.libs.json.JsValue
-
 import sw.platform.systems._
+import spray.http.{ContentTypes, ContentType}
 
-abstract class APISystem extends PartialFunction[APIRequest, Future[APIResponse]] {
+case class JSONAPIRequest(method: String, json:JsValue, params: Map[String, Any], workActor: WorkActor)
 
-  def handlers:PartialFunction[APIRequest, Future[APIResponse]]
+case class JSONAPIResponse(body:String, headers:Option[Map[String,String]] = None)
 
-  def apply(v1: APIRequest): Future[APIResponse] = handlers(v1)
+abstract class GenJSONAPIRoutes extends PartialFunction[JSONAPIRequest, Future[JSONAPIResponse]] {
 
-  def isDefinedAt(x: APIRequest): Boolean = true
+  def handlers:PartialFunction[JSONAPIRequest, Future[JSONAPIResponse]]
+
+  def apply(v1: JSONAPIRequest): Future[JSONAPIResponse] = handlers(v1)
+
+  def isDefinedAt(x: JSONAPIRequest): Boolean = true
+
+}
+
+case class PageRequest(path: String, params: Map[String, Any])
+
+case class PageResponse(body:Array[Byte], contentType:ContentType = ContentTypes.`application/octet-stream`, headers:List[(String,String)] = Nil)
+
+abstract class GenPageRoutes extends PartialFunction[PageRequest, Future[PageResponse]] {
+
+  def handlers:PartialFunction[PageRequest, Future[PageResponse]]
+
+  def apply(v1: PageRequest): Future[PageResponse] = handlers(v1)
+
+  def isDefinedAt(x: PageRequest): Boolean = true
 
 }
 
-case class APIRequest(method: String, json:JsValue, params: Map[String, Any], workActor: WorkActor)
-
-case class APIResponse(body:String, headers:Option[Map[String,String]] = None)
-
-
-abstract class APIHandler(method:String) extends PartialFunction[APIRequest, Future[APIResponse]] {
-
-  def isDefinedAt(x: APIRequest): Boolean = x.method == method
-
-}

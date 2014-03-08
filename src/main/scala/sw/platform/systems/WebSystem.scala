@@ -51,64 +51,14 @@ class WebActor extends Actor with ActorLogging {
 
   var workers = IndexedSeq.empty[WorkSystemInfo]
 
-  context.receiveTimeout
-
-  def static: Receive = {
-
-    if (Utils.isJar) {
-      // Get file from Jar public folder
-      val files = templatesFromClass
-
-      {
-        case req@HttpRequest(GET, _, _, _, _) => {
-          val path = req.uri.path.toString
-          try {
-            val (ct, f) = files(path)
-            sender ! HttpResponse(entity = HttpEntity(ct, f))
-          } catch {
-            case e: Exception =>
-              sender ! HttpResponse(status = 404, entity = "Unknown resource!")
-          }
-        }
-      }
-    } else {
-      val PUBLICPATH = "src/main/webapp/public"
-      val public = new File(PUBLICPATH)
-
-      println(public.isDirectory)
-
-      if (!public.isDirectory) throw new Exception("Search of webapp directory failed")
-
-      {
-        case req@HttpRequest(GET, _, _, _, _) => {
-        val path = if (req.uri.path.toString == "/") "/index.html" else req.uri.path.toString
-
-        val ct = cType(path)
-        try {
-          val file = if ((new File(PUBLICPATH + path)).exists()) {
-            loadStaticFile(PUBLICPATH + path)
-          } else if ((new File(PUBLICPATH + path+".html")).exists()) {
-            loadStaticFile(PUBLICPATH + path+".html")
-          } else throw new Exception
-
-          sender ! HttpResponse(entity = HttpEntity(ct, file))
-
-        } catch {
-          case e: Exception =>
-            sender ! HttpResponse(status = 404, entity = "Unknown resource!")
-        }
-      }
-      }
-    }
-
-  }
 
 
-  def receive = static orElse {
+
+  def receive = {
 
     case _: Http.Connected => sender ! Http.Register(self)
 
-    case msg@HttpRequest(POST, Uri.Path("/api"), _, _, _) => {
+    case msg@HttpRequest(_, uri, _, _, _) => {
       val snd = sender
       if (workers.size > 0) {
         jobCounter += 1
@@ -116,7 +66,11 @@ class WebActor extends Actor with ActorLogging {
         (worker ? msg)(3.seconds).mapTo[HttpResponse] onComplete {
           case Success(rsp) => snd ! rsp
           case Failure(e: akka.pattern.AskTimeoutException) => {
-            snd ! HttpResponse(entity = HttpEntity(contentType = ContentType(`application/json`, `UTF-8`), JSONResponse.error("timeout")))
+            if (uri == Uri.Path("/api")) {
+              snd ! HttpResponse(entity = HttpEntity(contentType = ContentType(`application/json`, `UTF-8`), JSONResponse.error("timeout")))
+            } else {
+              snd ! HttpResponse(status = 404, entity = "Request timeout")
+            }
           }
           case Failure(e) => {
             snd ! HttpResponse(entity = HttpEntity(contentType = ContentType(`application/json`, `UTF-8`), JSONResponse.error(e.toString)))
@@ -127,7 +81,7 @@ class WebActor extends Actor with ActorLogging {
       }
     }
 
-    case _: HttpRequest => sender ! HttpResponse(status = 404, entity = "Unknown resource!")
+    //case _: HttpRequest => sender ! HttpResponse(status = 404, entity = "Unknown resource!")
 
     case Timedout(HttpRequest(method, uri, _, _, _)) => {
       // first look at haproxy timeouts

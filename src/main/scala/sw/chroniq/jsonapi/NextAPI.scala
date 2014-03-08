@@ -1,4 +1,4 @@
-package sw.chroniq.api
+package sw.chroniq.jsonapi
 
 import collection.JavaConversions._
 import scala.concurrent.{Future, Promise}
@@ -14,16 +14,18 @@ import sw.chroniq.es.ES
 import org.scalastuff.esclient.ESClient
 import org.elasticsearch.search.{SearchHits}
 import sw.platform.web.JSONResponse
-import sw.platform.api.APIResponse
+import sw.platform.api.JSONAPIResponse
 import scala.Some
-import sw.platform.api.APIRequest
+import sw.platform.api.JSONAPIRequest
 import scala.util._
 
 
 
-class AddPOI extends APIHandler("addPOI") {
+class AddPOI(method:String) extends PartialFunction[JSONAPIRequest, Future[JSONAPIResponse]] {
 
-  def apply(request: APIRequest) = {
+  def isDefinedAt(x: JSONAPIRequest): Boolean = x.method==method
+
+  def apply(request: JSONAPIRequest) = {
 
     import collection.JavaConversions._
 
@@ -142,7 +144,7 @@ class AddPOI extends APIHandler("addPOI") {
 
     } map {
       res =>
-        APIResponse(JSONResponse.result("OK"))
+        JSONAPIResponse(JSONResponse.result("OK"))
     }
 
 
@@ -150,7 +152,9 @@ class AddPOI extends APIHandler("addPOI") {
 
 }
 
-class SearchPOI extends APIHandler("searchPOI") {
+class SearchPOI(method:String) extends PartialFunction[JSONAPIRequest, Future[JSONAPIResponse]] {
+
+  def isDefinedAt(x: JSONAPIRequest): Boolean = x.method==method
 
   case class POI(id: String, lat: Double, lon: Double, desc: String)
 
@@ -158,38 +162,38 @@ class SearchPOI extends APIHandler("searchPOI") {
 
   case class Params(zoom: Int, southWestLat: Double, southWestLon: Double, northEastLat: Double, northEastLon: Double, topic: String)
 
-  def apply(request: APIRequest) = {
+  def apply(request: JSONAPIRequest) = {
 
 
     import collection.JavaConversions._
     import org.elasticsearch.client.Client
 
-    val p = Promise[APIResponse]
+    val p = Promise[JSONAPIResponse]
 
     implicit val client = ES.client
 
     parseInput(request) match {
-      case Failure(e) => p success APIResponse(JSONResponse.error("error in params"))
+      case Failure(e) => p success JSONAPIResponse(JSONResponse.error("error in params"))
       case Success(params) => {
         queryClusters(params) onComplete {
-          case Failure(e) => p success APIResponse(JSONResponse.error("server error"))
+          case Failure(e) => p success JSONAPIResponse(JSONResponse.error("server error"))
           case Success(clustersResponse) => {
             queryClustersPOI(clustersResponse, params) match {
-              case None => p success APIResponse(generateJson(List())) // Empty list of clusters
+              case None => p success JSONAPIResponse(generateJson(List())) // Empty list of clusters
               case Some(queryIdOfPOI) => {
                 queryIdOfPOI onComplete {
-                  case Failure(e) => p success APIResponse(JSONResponse.error("server error"))
+                  case Failure(e) => p success JSONAPIResponse(JSONResponse.error("server error"))
                   case Success(idOfPOIResponse) => {
 
                     val idsAndSize = getIdsAndSize(idOfPOIResponse)
 
                     queryIds(idsAndSize) onComplete {
-                      case Failure(e) => p success APIResponse(JSONResponse.error("server error"))
+                      case Failure(e) => p success JSONAPIResponse(JSONResponse.error("server error"))
                       case Success(idsResponse) => {
                         val POIMap = queryIdsToPOIMap(idsResponse)
                         val clusters = parseCluster(clustersResponse, idsAndSize, POIMap)
                         val json = generateJson(clusters)
-                        p success APIResponse(json)
+                        p success JSONAPIResponse(json)
                       }
                     }
                   }
@@ -203,7 +207,7 @@ class SearchPOI extends APIHandler("searchPOI") {
 
 
 
-    def parseInput(request: APIRequest) = {
+    def parseInput(request: JSONAPIRequest) = {
       import scala.language.existentials
 
       try {
@@ -360,9 +364,11 @@ class SearchPOI extends APIHandler("searchPOI") {
   }
 }
 
-class CreateIndexes extends APIHandler("createIndexes") {
+class CreateIndexes(method:String) extends PartialFunction[JSONAPIRequest, Future[JSONAPIResponse]] {
 
-  def apply(request: APIRequest) = {
+  def isDefinedAt(x: JSONAPIRequest): Boolean = x.method==method
+
+  def apply(request: JSONAPIRequest) = {
 
     val client = ES.client
 
@@ -420,7 +426,7 @@ class CreateIndexes extends APIHandler("createIndexes") {
     )
 
     Future sequence List(deletePOIIndex, deleteClusterIndex, createPOIIndex, createClusterIndex) map {
-      r => APIResponse(JSONResponse.result("OK"))
+      r => JSONAPIResponse(JSONResponse.result("OK"))
     }
 
   }
