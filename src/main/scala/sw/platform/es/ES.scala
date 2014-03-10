@@ -1,4 +1,4 @@
-package sw.chroniq.es
+package sw.platform.es
 
 import org.elasticsearch.client.transport.TransportClient
 import org.elasticsearch.common.transport.InetSocketTransportAddress
@@ -12,5 +12,7 @@ object ES {
   tsclient.addTransportAddress(new InetSocketTransportAddress("localhost", 9300))
 
   val client: Client = tsclient
+
+  def apply() = client
 
 }

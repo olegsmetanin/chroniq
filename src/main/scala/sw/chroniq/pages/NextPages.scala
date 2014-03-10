@@ -182,7 +182,18 @@ class EventPage(path: String) extends PartialFunction[PageRequest, Future[PageRe
 
 
     Future(PageResponse(html, contentType = ContentType(MediaTypes.`text/html`)))
-
-
   }
 }
+
+
+class HelloPage(path: String) extends PartialFunction[PageRequest, Future[PageResponse]] {
+  def isDefinedAt(x: PageRequest): Boolean = x.path == path
+
+  def apply(v1: PageRequest): Future[PageResponse] = {
+    val html:String= sw.chroniq.pages.html.hello2("Bob", 22).body
+
+
+    Future(PageResponse(html.getBytes, contentType = ContentType(MediaTypes.`text/html`)))
+  }
+}
+

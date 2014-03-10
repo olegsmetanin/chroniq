@@ -66,7 +66,7 @@ class GetFilmsRequestHandler(method:String) extends PartialFunction[JSONAPIReque
   import DAO._
 
   def apply(request:JSONAPIRequest) = {
-    DBs("saas")
+    DBs("events")
       .sendQuery("SELECT code, title, did, date_prod, kind, len FROM FILMS")
       .asListOf[Film]
       .map {
@@ -89,7 +89,7 @@ class SQLRequestHandler(method:String) extends PartialFunction[JSONAPIRequest, F
   def apply(request:JSONAPIRequest) = {
     (request.json \ "sql").asOpt[String] match {
       case Some(sql) => {
-        DBs("saas")
+        DBs("events")
           .sendQuery(sql)
           .asListOf[Any]
           .map {

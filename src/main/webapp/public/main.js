@@ -1,15 +1,33 @@
-var topic = $("#topic");
-
-$("#showdialog").on('click',function () {
-    $('#mapwrap').toggle();
-    $('#dialogwrap').toggle();
-})
-
+var tags = $("#tags");
 
 $("#hidedialog").on('click',function () {
     $('#mapwrap').toggle();
     $('#dialogwrap').toggle();
 })
+
+$(function () {
+    var now = moment();
+    var nowround = moment({y: now.year(), M: now.month(), d: now.date()});
+    var yesterday = moment(nowround).subtract('days', 1);
+    var tomorrow = moment(nowround).add('days', 1);
+
+    $('#from').datepicker({
+        format: "yyyy-mm-dd",
+        todayBtn: "linked",
+        calendarWeeks: true,
+        autoclose: true,
+        todayHighlight: true
+    }).datepicker('setDate', new Date(yesterday));
+
+    $('#to').datepicker({
+        format: "yyyy-mm-dd",
+        todayBtn: "linked",
+        calendarWeeks: true,
+        autoclose: true,
+        todayHighlight: true
+    }).datepicker('setDate', new Date(tomorrow));
+
+});
 
 
 var map = new L.Map('map');
@@ -33,25 +51,25 @@ map.addLayer(osm);
 map.on('moveend', onMapMove);
 
 function onMapMove(e) {
-    mapChanges.onNext({topic: topic.val(), bounds: map.getBounds(), zoom: map.getZoom()});
+    mapChanges.onNext({tags: tags.val(), bounds: map.getBounds(), zoom: map.getZoom()});
 }
 
 // Input topic key actions
 
-var topicKeyups = Rx.Observable.fromEvent(topic, 'keyup')
+var topicKeyups = Rx.Observable.fromEvent(tags, 'keyup')
     .map(function (e) {
         return e.target.value;
-    })
-    .filter(function (text) {
-        return text.length > 2;
     });
+//    .filter(function (text) {
+//        return text.length > 2;
+//    });
 
 var throttledTopicKeyups = topicKeyups
     .throttle(500 /* ms */);
 
 var topickeys = throttledTopicKeyups.subscribe(
     function (x) {
-        mapChanges.onNext({topic: x, bounds: map.getBounds(), zoom: map.getZoom()});
+        mapChanges.onNext({tags: x, bounds: map.getBounds(), zoom: map.getZoom()});
     },
     function (err) {
         console.log('Error: ' + err);
@@ -67,7 +85,7 @@ function searchAction(criteria) {
         "method":"searchPOI",
         "zoom"   : criteria.zoom,
         "bounds" : [[criteria.bounds.getSouth(), criteria.bounds.getWest()], [criteria.bounds.getNorth(), criteria.bounds.getEast()]],
-        "topic"   : criteria.topic
+        "tags"   : criteria.tags
     };
     //console.log(JSON.stringify(data))
 
@@ -111,7 +129,7 @@ searchResult.subscribe(function (data) {
                     iconSize: new L.Point(40, 40)
                 })
             })
-                .bindPopup('This is Denver, CO.')
+
         )
         } else {
             var pois = cluster.poi;
@@ -121,13 +139,15 @@ searchResult.subscribe(function (data) {
                     L.marker([poi.lat, poi.lon], {
                         icon: L.divIcon({
                             className: 'event',
-                            html:'<div><img src="https://cdn4.iconfinder.com/data/icons/keynote-and-powerpoint-icons/256/Analytics_balls-48.png"/>'+'</div>',
-                            iconSize: new L.Point(48, 48)
+                            html:'<div><img src="'+poi.icon+'"/>'+'</div>',
+                            iconSize: new L.Point(32, 37),
+                            iconAnchor:   [16, 35]
                         })
                     })
-                    //    .bindPopup('This is Denver, CO.')
+                        .bindLabel(poi.preview)
                         .on("click", function() {
-                            $('#myModal').modal('show')
+                            $('#mapwrap').toggle();
+                            $('#dialogwrap').toggle();
                         })
 
 
@@ -141,6 +161,8 @@ searchResult.subscribe(function (data) {
         var layer = markersArray[i];
         markerLayer.addLayer(layer);
     }
+    } else {
+        markerLayer.clearLayers();
     }
     //console.log('Next search: ',data);
 
@@ -150,4 +172,4 @@ searchResult.subscribe(function (data) {
 });
 
 
-mapChanges.onNext({topic: "", bounds: map.getBounds(), zoom: map.getZoom()});
+mapChanges.onNext({tags: "", bounds: map.getBounds(), zoom: map.getZoom()});

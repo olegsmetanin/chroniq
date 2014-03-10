@@ -26,6 +26,7 @@ import spray.http.Timedout
 import sw.platform.utils.Utils
 import sw.platform.utils.WebUtils._
 import scala.Option
+import akka.util.Timeout
 
 
 object WebActor {
@@ -34,7 +35,7 @@ object WebActor {
 
 class WebActor extends Actor with ActorLogging {
 
-  //implicit val timeout: Timeout = 20.second // for the actor 'asks'
+  implicit val timeout: Timeout = 30.second // for the actor 'asks'
 
   import context.dispatcher
 
@@ -63,7 +64,7 @@ class WebActor extends Actor with ActorLogging {
       if (workers.size > 0) {
         jobCounter += 1
         val worker: ActorRef = workers(jobCounter % workers.size).actorRef
-        (worker ? msg)(3.seconds).mapTo[HttpResponse] onComplete {
+        (worker ? msg).mapTo[HttpResponse] onComplete {
           case Success(rsp) => snd ! rsp
           case Failure(e: akka.pattern.AskTimeoutException) => {
             if (uri == Uri.Path("/api")) {

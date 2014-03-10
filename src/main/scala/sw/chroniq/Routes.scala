@@ -5,7 +5,7 @@ import sw.chroniq.jsonapi._
 import sw.chroniq.pages._
 
 
-class JSONAPIRoutes extends GenJSONAPIRoutes  {
+class JSONAPIRoutes extends GenJSONAPIRoutes {
 
   def handlers = new SimpleRequestHandler("simpleRequest") orElse
     new GetFilmsRequestHandler("getFilms") orElse
@@ -21,13 +21,14 @@ class JSONAPIRoutes extends GenJSONAPIRoutes  {
 }
 
 
-class PageRoutes extends GenPageRoutes  {
+class PageRoutes extends GenPageRoutes {
 
   def handlers = (if (sw.platform.utils.Utils.isJar)
     new StaticPagesFromJar
   else
     new LiveReloadStaticPages) orElse
     new EventPage("/event") orElse
+    new HelloPage("/hello") orElse
     new NoSuchPage
 
 }

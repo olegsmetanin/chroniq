@@ -4,7 +4,9 @@ import sw.platform.api._
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 import sw.platform.utils.WebUtils._
-import java.io.File
+import java.io.{FileInputStream, File}
+import scala.tools.nsc.io._
+import spray.http.StatusCodes
 
 class LiveReloadStaticPages extends PartialFunction[PageRequest, Future[PageResponse]] {
 
@@ -18,12 +20,13 @@ class LiveReloadStaticPages extends PartialFunction[PageRequest, Future[PageResp
     val path = if (x.path == "/") "/index.html" else x.path
     val ct = cType(path)
     val bytes = if ((new File(PUBLICPATH + path)).exists()) {
-      loadStaticFile(PUBLICPATH + path)
+      Streamable.bytes(new FileInputStream(PUBLICPATH + path))
     } else if ((new File(PUBLICPATH + path + ".html")).exists()) {
-      loadStaticFile(PUBLICPATH + path + ".html")
+      Streamable.bytes(new FileInputStream(PUBLICPATH + path+ ".html"))
     } else "Unknown resource!".getBytes()
 
-    Future(PageResponse(bytes, contentType = ct))
+    val resp = PageResponse(bytes, contentType = ct)
+    Future(resp)
 
   }
 
@@ -53,7 +56,7 @@ class StaticPagesFromJar extends PartialFunction[PageRequest, Future[PageRespons
 
 class NoSuchPage extends PartialFunction[PageRequest, Future[PageResponse]] {
 
-  def apply(v1: PageRequest): Future[PageResponse] = Future(PageResponse("Page not found".getBytes()))
+  def apply(v1: PageRequest): Future[PageResponse] = Future(PageResponse("Not found".getBytes(),status = StatusCodes.NotFound))
 
   def isDefinedAt(x: PageRequest): Boolean = true
 

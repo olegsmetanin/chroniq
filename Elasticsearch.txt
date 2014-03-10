@@ -1,0 +1,70 @@
+curl -XGET 'http://localhost:9200/poiclusters/poi/_search' -d '
+{
+    "query" : {
+        "match_all" : {}
+    }
+}
+'
+curl -XGET 'http://localhost:9200/poi/poi/_search' -d '
+{
+    "query" : {
+        "match_all" : {}
+    }
+}
+'
+
+curl -XGET 'http://localhost:9200/poi/poi/_search' -d '
+{
+  "query" : {
+    "bool":{
+      "must": [
+        {
+          "match" : {
+            "z10" : "BQVloGL4Q9ipnNSNOo3kDw"
+          }
+        },
+        {
+          "match" : {
+            "tags" : "lorem"
+          }
+        },
+        {
+            "range" : {
+                "date" : {
+                    "gte" : "2014-01-01",
+                    "lte" : "2014-03-01",
+                    "boost" : 2.0
+                }
+            }
+        }
+      ]
+    }
+  }
+}
+'
+
+
+curl -XGET 'http://localhost:9200/poi/poi/_search' -d '
+{
+  "query" : {
+    "bool":{
+      "must": [
+        {
+          "match" : {
+            "tags" : "lorem"
+          }
+        },
+        {
+            "range" : {
+                "date" : {
+                    "gte" : "2014-01-01",
+                    "lte" : "2014-03-01",
+                    "boost" : 2.0
+                }
+            }
+        }
+      ]
+    }
+  }
+}
+'

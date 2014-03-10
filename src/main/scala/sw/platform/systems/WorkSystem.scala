@@ -91,10 +91,10 @@ class WorkActor(jsonapi: GenJSONAPIRoutes, pages: GenPageRoutes) extends Actor {
           if ((System.currentTimeMillis() - time) > 10000) println("Request >10s :" + req.toString)
           val headers: List[spray.http.HttpHeader] = resp.headers
           val contentType = resp.contentType
-          snd ! HttpResponse(entity = HttpEntity(contentType,resp.body), headers = headers)
+          snd ! HttpResponse(entity = HttpEntity(contentType,resp.body), headers = headers, status = resp.status)
         }
         case Failure(e) => {
-          snd ! HttpResponse(entity = HttpEntity("Request failed"))
+          snd ! HttpResponse(entity = HttpEntity("Request failed"),status = StatusCodes.InternalServerError)
         }
 
 
@@ -111,11 +111,14 @@ class WorkActor(jsonapi: GenJSONAPIRoutes, pages: GenPageRoutes) extends Actor {
 
       implicit val WorkActor = this
 
+
       val json = Json.parse(req.entity.data.asString)
       val method = (json \ "method").asOpt[String].get
       val params: Map[String, Any] = Map[String, Any]("protocol" -> "http")
+      val headers = req.headers
       val time = System.currentTimeMillis()
-      jsonapi(JSONAPIRequest(method, json, params, this)).onComplete {
+
+      jsonapi(JSONAPIRequest(method, json, params, this, headers)).onComplete {
         s =>
           if ((System.currentTimeMillis() - time) > 10000) println("Request >10s :" + req.toString)
           snd ! HttpResponse(entity = HttpEntity(contentType = ContentType(`application/json`, `UTF-8`), s.get.body))

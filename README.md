@@ -29,9 +29,15 @@ curl -XPOST -H "Content-Type: text/plain; charset=UTF-8" 'http://localhost/api' 
 
 curl -XPOST -H "Content-Type: text/plain; charset=UTF-8" 'http://localhost/api' -d '{
       "method" : "addPOI",
+      "event_id":"qweasd1",
       "lat" : 5,
       "lon" : 5,
-      "desc"   : "жизнь смерть война мир"
+      "date": "2014-02-01",
+      "icon": "vendor/mapicons/battlefield.png",
+      "lang": "en",
+      "title": "Event Title",
+      "markup": "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
+      "tags": "lorem"
 }'
 
 
@@ -39,13 +45,11 @@ curl -XPOST -H "Content-Type: text/plain; charset=UTF-8" 'http://localhost/api' 
       "method" : "searchPOI",
       "zoom"   : 10,
       "bounds" : [[-10,-10],[10,10]],
-      "topic"   : "жизнь"
+      "from"   : "2014-01-01",
+      "to"     : "2014-03-01",
+      "tags"   : "lorem"
 }'
 
 
-{
-      "method" : "searchPOI2",
-      "zoom"   : 9,
-      "bounds":[[55.0,34],[56,40]],
-      "topic"   : "жизнь"
-}
+
+
