@@ -29,12 +29,16 @@ libraryDependencies ++= Seq(
   "com.typesafe.play" % "play-json_2.10" % "2.2.1",
   "com.github.mauricio" %% "postgresql-async" % "0.2.12",
   "com.github.nscala-time" %% "nscala-time" % "0.8.0",
-  "org.elasticsearch" % "elasticsearch" % "1.0.0",
+  "org.elasticsearch" % "elasticsearch" % "1.0.1",
+  "org.elasticsearch" % "elasticsearch" % "1.0.1" classifier "tests",
   "io.spray"  %%  "twirl-api" % "0.6.2",
   "com.typesafe" %% "scalalogging-slf4j" % "1.0.1",
   "org.slf4j" % "slf4j-api" % "1.7.1",
   "org.slf4j" % "log4j-over-slf4j" % "1.7.1",  // for any java classes looking for this
-  "ch.qos.logback" % "logback-classic" % "1.0.3"
+  "ch.qos.logback" % "logback-classic" % "1.0.3",
+  "org.scalatest" % "scalatest_2.10" % "2.1.0" % "test",
+  "junit" % "junit" % "4.11" % "test",
+  "org.apache.lucene" % "lucene-test-framework" % "4.7.0" % "test"
 )
 
 resolvers ++= Seq(

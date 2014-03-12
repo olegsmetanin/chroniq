@@ -21,6 +21,7 @@ import sw.platform.db._
 import sw.platform.db.DAO._
 import sw.chroniq.model._
 import spray.http.HttpHeaders
+import sw.chroniq.evolutions._
 
 class AddPOI(method: String) extends PartialFunction[JSONAPIRequest, Future[JSONAPIResponse]] {
 
@@ -542,83 +543,13 @@ class SearchPOI(method: String) extends PartialFunction[JSONAPIRequest, Future[J
   }
 }
 
-class CreateIndexes(method: String) extends PartialFunction[JSONAPIRequest, Future[JSONAPIResponse]] {
+
+class UpgradeDB(method: String) extends PartialFunction[JSONAPIRequest, Future[JSONAPIResponse]] {
 
   def isDefinedAt(x: JSONAPIRequest): Boolean = x.method == method
 
   def apply(request: JSONAPIRequest) = {
-
-    val deletePOIIndex = ES().execute(new DeleteIndexRequest("poi"))
-
-    val deleteClusterIndex = ES().execute(new DeleteIndexRequest("poiclusters"))
-
-    val createPOIIndex = ES().execute(
-      ES().admin().indices().prepareCreate("poi").addMapping("poi",
-        """
-{
-  "poi": {
-    "properties": {
-      "z0": {"type": "string"},
-      "z1": {"type": "string"},
-      "z2": {"type": "string"},
-      "z3": {"type": "string"},
-      "z4": {"type": "string"},
-      "z5": {"type": "string"},
-      "z6": {"type": "string"},
-      "z7": {"type": "string"},
-      "z8": {"type": "string"},
-      "z9": {"type": "string"},
-      "z10": {"type": "string"},
-      "z11": {"type": "string"},
-      "z12": {"type": "string"},
-      "z13": {"type": "string"},
-      "z14": {"type": "string"},
-      "z15": {"type": "string"},
-      "z16": {"type": "string"},
-      "z17": {"type": "string"},
-      "z18": {"type": "string"},
-      "event_timestamp": {"type": "long"},
-      "tags": {"type": "string"},
-      "location": {"type": "geo_point"}
-    }
-  }
-}
-        """
-      ).request()
-    )
-
-    val createClusterIndex = ES().execute(
-      ES().admin().indices().prepareCreate("poiclusters").addMapping("poi",
-        """
-{
-  "poi": {
-    "properties": {
-      "zoom": {"type": "integer"},
-      "location": {"type": "geo_point"}
-    }
-  }
-}
-        """
-      ).request()
-    )
-
-    val promise = Promise[JSONAPIResponse]
-
-    Future sequence List(deletePOIIndex, deleteClusterIndex) onComplete {
-      case Failure(e) => {
-        println(e)
-        promise success JSONAPIResponse(JSONResponse.error("delete indexes failed"))
-      }
-      case Success(s) => {
-        Future sequence List(createPOIIndex, createClusterIndex) onComplete {
-          case Failure(e) => promise success JSONAPIResponse(JSONResponse.error("create index failed"))
-          case Success(s) => {
-            promise success JSONAPIResponse(JSONResponse.result("OK"))
-          }
-        }
-      }
-    }
-
-    promise.future
+    Evolutions()
+    Future(JSONAPIResponse(JSONResponse.result("OK")))
   }
 }

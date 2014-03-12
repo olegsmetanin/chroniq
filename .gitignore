@@ -19,3 +19,4 @@ target/
 stat/*
 !.gitkeep
 sbt-launch.jar
+data/

@@ -32,6 +32,7 @@ import spray.http.HttpRequest
 import akka.cluster.ClusterEvent.MemberUp
 import sw.platform.api.PageRequest
 import akka.cluster.ClusterEvent.CurrentClusterState
+import scala.concurrent.Future
 
 
 object WorkActor {
@@ -40,7 +41,7 @@ object WorkActor {
 
 }
 
-class WorkActor(jsonapi: GenJSONAPIRoutes, pages: GenPageRoutes) extends Actor {
+class WorkActor(jsonapi: PartialFunction[JSONAPIRequest, Future[JSONAPIResponse]], pages: PartialFunction[PageRequest, Future[PageResponse]]) extends Actor {
 
 
   val cluster = Cluster(context.system)
@@ -170,9 +171,9 @@ class WorkSystem(system: ActorSystem) {
 
   val pageclass = if (config.hasPath("pageroutes")) config.getString("pageroutes") else throw new Exception("Failed to find pageroutes property")
 
-  val api = Class.forName(jsonapiclass).newInstance.asInstanceOf[GenJSONAPIRoutes]
+  val api = Class.forName(jsonapiclass).newInstance.asInstanceOf[PartialFunction[JSONAPIRequest, Future[JSONAPIResponse]]]
 
-  val pages = Class.forName(pageclass).newInstance.asInstanceOf[GenPageRoutes]
+  val pages = Class.forName(pageclass).newInstance.asInstanceOf[PartialFunction[PageRequest, Future[PageResponse]]]
 
   val actorProps = Props(classOf[WorkActor], api, pages)
 
